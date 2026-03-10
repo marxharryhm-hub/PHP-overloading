@@ -179,7 +179,7 @@ $prePHP_version = '2.1; built: 10 March 2026 - implements OOX';
 		%dd.dd Mon \'yy     
 				  ---03 Mar '26---   
 	  misc:   %s  ---Hello worl---   
-	  uding sprintf formats:   
+	  using sprintf formats:   
 		%f       
 
 	record(...$named_parameters)  
@@ -194,7 +194,7 @@ $prePHP_version = '2.1; built: 10 March 2026 - implements OOX';
 	  This is a "volitile" function, and it will affect OOX functionality if
 	  extended.
 	  Used to convert any passed value into a string, used by disp() 
-	  and fomstr().  
+	  and formstr().  
 	  You can overload this function for any vartype().   
 
 	inline object syntax:  
@@ -206,8 +206,9 @@ $prePHP_version = '2.1; built: 10 March 2026 - implements OOX';
 		  {name:'Harry'} )   
 
 		function formstr( $stringtoformat, $params )    
+		  //add the default values on $params
 		  $params->age ??= '21 with 40y experience'; 
-		  //and here we add the default values on $params
+		  
 		  ...
 
 */
@@ -712,3 +713,4 @@ $cleanup();
 eval( '?>' . $_script[ $_script_name ] );
 die;
 ?>
+
