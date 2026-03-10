@@ -1,6 +1,6 @@
 <pre>
 <?php
-$prePHP_version = '2; built: 7 March 2026 - implements OOX';
+$prePHP_version = '2.1; built: 10 March 2026 - implements OOX';
 /*
 	Developer: Harry Marx marxh2@unisa.ac.za  
 	 OOX - Overload, Override and eXtend
@@ -19,9 +19,6 @@ $prePHP_version = '2; built: 7 March 2026 - implements OOX';
 	 extended function, with a single underscode. 
 	 You can only access an overridden function, from its own extended version.
 
-	 import()
-	  use import instead of include/require, if the include contains OOX syntax.
-
 	 overload function name( typed paramters, untyped parameters ) {} )
 
 	  Warning:
@@ -30,6 +27,10 @@ $prePHP_version = '2; built: 7 March 2026 - implements OOX';
 
 	  signature:: the combination of the name and types of parameters, 
 		of an overloaded function
+
+	  When overloading a variadic, the required types must be defined on inidividual
+	  parameters, and the variadic parameter will be typeless. As the types must match
+	  the signature, you cannot use variadic parameters in the signature.
 	  
 	  Types used in signatures correspond to the values returned by vartype(). 
 	  'int' will not work, as vartype(1) will return 'integer'.
@@ -210,20 +211,29 @@ $prePHP_version = '2; built: 7 March 2026 - implements OOX';
 		  ...
 
 */
-
+/*
+2.1	fixed importing of files
+*/
 $_FUNCTIONS = [];
 $_IMPORTED = [];
+$_script = [];
 
+//no OOX allowed in boot
 //volitile functions - changes to it in user code will affect prePHP
+//also functions that use volitile functions are volitile
+$volitile = ['str','vartype'];
 $boot = <<<'boot'
 	//cannot redeclare native functions here
-	function str( $x ) { //volitile
+	function import($f) {
+		eval( '?>'. $GLOBALS['_script'][$f] );
+	 }
+	function str( $x ) { 
 		if ($x === null) return '<i>null</i>';
 		if ($x === true) return '<i>true</i>';
 		if ($x === false) return '<i>false</i>';
 		return print_r( $x, true ); 
 	 }		 
-	function vartype( $v ) { //volitile	
+	function vartype( $v ) { 	
 		if ($v === null) return 'null';
 		if ( is_array( $v ) && array_is_list( $v ) ) return 'list';
 		if ( gettype( $v ) == 'object') {		
@@ -424,7 +434,8 @@ $boot = <<<'boot'
 	 }
 boot;
 
-$redeclare = <<<'redeclare'
+//OOX allowed here
+$redeclared = <<<'redeclare'
 	//redeclare native functions here
 
 redeclare;
@@ -524,7 +535,13 @@ function _call_( $fn, $n, ...$p ) {
 	$deref = function ( $s ) {	
 		global $_FUNCTIONS;
 		foreach( $_FUNCTIONS as $fn => $fx ) {
-			if ( isset( $fx[0]->nored ) ) ;
+			if ( isset( $fx[0]->nored ) ) {
+				$f = substr( $fn, 3 );
+				if ( str_starts_with( $fn, '_o_' ) ) {
+					$s = preg_replace( '/\b'.$f.'\(/', "_o_{$f}( ", $s );
+					$s = preg_replace( '/_call_\(\''.$f.'\',null,/', "_call_('_o_{$f}',null,", $s );
+				}
+			}
 			elseif ( str_starts_with( $fn, '_o_' ) ) {
 				$f = substr( $fn, 3 );
 				//overloaded
@@ -585,33 +602,38 @@ function _call_( $fn, $n, ...$p ) {
 		}
 		return $s;
 	};	
-	
-	$prePHP = function ( $src ) { global $parse, $hideNCS, $unhide;
+
+	$prePHP = function ( $file ) { global $parse, $hideNCS, $unhide, $prePHP, $_script;
 		$p = 0;
+		$src = trim( file_get_contents( $file ) ); 
+
 		while ( ( $p = strpos( $src, '<?php', $p ) ) !== false ) {
 			$q = strpos( $src, '?>', $p ); if ( $q === false ) $q = strlen( $src );
 			$s = substring( $src, $p+5, $q-1);
 			if ( stripos( $s, '#[noprephp]' ) === false ) {
 
 				$s = $hideNCS( $s );	
-		
-				// import( file, file, file ):					
-					if ( preg_match_all( '/\bimport\(/', $s, $M, PREG_SET_ORDER + PREG_OFFSET_CAPTURE ) ) {		
-						foreach( array_reverse( $M ) as $m ) {
+
+				//require_once './gap_core.php';
+				//require
+				//include								
+					if ( preg_match_all( '/[\n\r]\s*(require|require_once|include|include_once)\s+/', $s, $M, 
+						PREG_SET_ORDER + PREG_OFFSET_CAPTURE ) ) {		
+						foreach( $M as $m ) {
 							$i = ( $m[0][1] );
-							$j = str_paired( $s, $i );
-							$files = split(',', trim( substring( $s, $i+7, $j-1 ), ' \'') );
-							foreach( $files as $file ) {
-								if ( ! isset( $_IMPORTED[ $file ] ) ) { 
-									$_IMPORTED[ $file ] = true;
-									$prePHP( file_get_contents( $file ) );
-								}
-							}
-							for(; $i <= $j; $i++ ) if ( $s[$i] > ' ' ) $s[$i] = ' ';
+							$i += strlen( $m[0][0] );
+							$j = strpos( $s, ';', $i );
+							$f = substring( $s, $i, $j-1 );
+							$f = trim( $f,  ' \'');
+							if ( ! isset( $_IMPORTED[ $f ] ) ) { 
+								$_IMPORTED[ $f ] = true;
+								$f = $prePHP( $f );										
+							} else $f = '';	
+							$s = substr_replace( $s, $f ? " import('$f'); #" : '#', $m[1][1], 0 );
 						}
 					}
 
-				// lambda functions:
+				// lambda functions:	()=>  become fn()=>  
 					$s = preg_replace( '/\W(\([^()]*\)\s*=>)/', ' fn$1', $s );
 
 				// new inline object syntax:
@@ -630,43 +652,55 @@ function _call_( $fn, $n, ...$p ) {
 					}	
 
 				$ss = $parse( $s );
+				if ( strlen( trim($ss) ) == 0 ) {
+					$src = substring_replace( $src, '', $p, $q+1 );
+					$p--;
+				}
+				elseif ( $ss !== $s ) 
+					$src = substring_replace( $src, $ss, $p+5, $q-1 );			
 
-				if ( $ss !== $s ) $src = substring_replace( $src, $ss, $p+5, $q-1 );			
 			}
 			$p++;
 		}
-		return $src;
+		if (strlen( $src) > 0) { $_script[$file] = $src; return $file; }
+		return false;
 	 };
 
-eval( $boot );
 
+eval( $boot ); //no OOX allowed
 $parse( $hideNCS( $boot ) );
-$redeclare = $parse( $hideNCS( $redeclare ) );
 
+$redeclared = $parse( $hideNCS( $redeclared ) );
 $derefFuncs();
-$redeclare = $deref( $redeclare );
-eval( $redeclare );
+$redeclared = $deref( $redeclared );
+eval( $redeclared );
 
 $_script_name = $_SERVER['SCRIPT_FILENAME'];
-$_script = file_get_contents( $_script_name );
-$_script = $prePHP( $_script );
-$derefFuncs();
+$prePHP( $_script_name );
 
-foreach ( $_FUNCTIONS as $fn => $fx ) {
-	if ( count( $fx ) == 1 && ! is_native_function( $fn ) ) {			
-			if ( ! is_callable( $fn ) ) {
-				eval ( "function {$fn} ( {$fx[0]->ps} ) {$fx[0]->fx}" ); 
-			}
-			$_FUNCTIONS[$fn][0]->nored = true;		
+//reduce functions that was not OOX'ed to direct calls - no need to do _call_()
+foreach ( $_FUNCTIONS as $fn => $fx ) {	
+	if ( count( $fx ) == 1 && ! is_native_function( $fn ) && ! in_array( $fn, $volitile) ) {			
+		foreach ( $volitile as $vf ) { //funcs that contain volitile funcs is also volitile
+			if ( str_contains( $fx[0]->fx, $vf.'(' ) ) goto next_fn;
+			if ( str_contains( $fx[0]->fx, "_call_('$vf'" ) ) goto next_fn;
+		}
+		if ( ! is_callable( $fn ) ) {
+			eval ( "function {$fn} ( {$fx[0]->ps} ) {$fx[0]->fx}" ); 
+		}		
+		$_FUNCTIONS[$fn][0]->nored = true;				
 	}
+	next_fn:
 }
 
-$_script = $deref( $_script );
-$_script = $unhide( $_script );
 
-//echo join( '<br>', array_map_keys( fn($k,$v) => $k.'=>'.trim($v,"\n\r"), explode( "\n", $_script ) ) ).'<br>';
-//echo highlight_string( $_script );
-//echo '<pre>'.print_r( $_FUNCTIONS, true ); die;
+$derefFuncs();
+
+foreach( $_script as $i => $s ) $_script[$i] = $unhide( $deref ( $s ) );
+
+//echo '<pre>'.print_r( $_FUNCTIONS, true ); //die;
+//foreach( $_script as $f => $s ) echo '<pre>'. $f . ':<br>'. str_replace('<','&lt;', trim($s)); die;
+//echo '<pre>'. $_script_name . ':<br>'. str_replace('<','&lt;', trim( $_script[$_script_name] )); //die;
 
 $cleanup = function() {
 	foreach( ['cleanup','boot','redeclare','unhide','parse','deref','derefFuncs','hideNCS','prePHP'] as $x ) 
@@ -674,6 +708,7 @@ $cleanup = function() {
 };
 $cleanup();
 
-eval( '?>' . $_script );
+
+eval( '?>' . $_script[ $_script_name ] );
 die;
 ?>
