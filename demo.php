@@ -54,4 +54,17 @@
 	disp( substring_replace( '012{345}67890',  'abc', '{', '}') );
 	disp( substring_replace( '012{345}67890',  'abc', '{3', '5}') );
 
+
+	//an example on how to extend formstr() to accept in-sito defaults
+	function formstr( $s, $v ) {
+		if ( preg_match_all( '/\{(\w*)=([^}]*)/', $s, $M, PREG_SET_ORDER + PREG_OFFSET_CAPTURE   ) ) {
+			foreach ( array_reverse( $M ) as $m ) 
+				$s = substr_replace( $s, '', $m[2][1]-1, strlen($m[2][0] )+1 );			
+			$v->{$m[1][0]} ??= $m[2][0];
+		}
+		return formstr_( $s, $v ); //call previous version
+	}
+
+	disp( formstr( 'Interpolation with defaults: {name} {surname=marx}' , {name:'harry'} ) );
+
 ?>
