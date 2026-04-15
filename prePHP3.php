@@ -1,7 +1,6 @@
 <?php
 	$prePHP = obj( version: '3.0', update: 'built: 12 April 2026 - implements OOX' );
 	
-
 	$prePHP->FUNCTIONS = [];	
 
 	//these are functions not affected by OOX, and do not use OOX
