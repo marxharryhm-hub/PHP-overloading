@@ -2,6 +2,10 @@ Latest version: prePHP3
 This pre-processor is to be linked in php.ini:
 auto_prepend_file = "C:\inetpub\wwwroot\prePHP3.php"
 
+Using this code - you do so with no guarentees, no support. It has no copyright, and no licensing required.
+But you use it at your own risk!!!
+This is only a technology demonstration version.
+
 This will then allow novel syntax like:
   overload function str( string $s ) { ....snipped
   overload function str( integer $i ) { ... snipped
