@@ -11,3 +11,6 @@ The correct version of str() will then be selected runtime, based on the type of
 You can change the type of $x in disp() and it will still call the correct function now for the new type.
 
 You can also do override and extend - see documentation in the preprocessor.
+
+A more user friendly description is on medium:
+https://medium.com/@marxharry.hm/extending-php-ea428fd58bb2
