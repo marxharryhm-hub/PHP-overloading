@@ -1,111 +1,14 @@
 <pre>
-Demo for prePHP3
-------
-Introduction
-------------
-
-Encapsulation, inheritance and polymorhism was the main drive force for building OOP.
-Yet OOP is not the only paradigm with dominion over these concepts.
-
-I would like to explore how some of these technical concepts in OO, can be realized 
-in non-OO domains. The reason being the overhead in many OO languages, and 
-syntactical verbosity.
-
-Encaplulation is the collecting of variables (properties) into a stucture (a class).
-Polymorhism is mapping functions (methods) to these structures. And then inheritance 
-is the mechanism to progress from abstract classes to specialized implimentations thereof.
-
-In contrast, Functional Programming (FP), focus on the following princples:
-- Immutable data - no re-assignment
-- Pure functions: functions are not allowed to have side effects
-- First-class functions: Functions can be passed as arguments, and returned as results 
-- Higher order functions: Functions that uses First-Class functions
-
-Combining FP with OO could be advantagous.
-I will discuss PHP without referring to its OO implimentation.
-
-Encapsulation
--------------
-
-prePHP propmotes the easy grouping of fields into structures, with the minimum of syntax, 
-using a variadic function as intermediate. 
-Consider the syntax for associative arrays:		
-	$A = ['name' => 'harry', 'job' => 'developer' ];
-Accessing it:
-	echo $A['name'] . ' is a ' . $A['job'];
-
-PHP does allow the creation of an onject, based on associative arrays:
-	$O = (object) ['name' => 'harry', 'job' => 'developer' ];
-	echo $O->name . ' is a ' . $O->job;
-Such an object instantiates a stdClass, and as such does not have methods.
-For our purposes we can call this a Structure, borrowing from C/C++.
-
-But PHP also allows named parameters when calling functions, and variadic functions, 
-accepting any number of arguments. Combining these allows prePHP to present:
-	function obj( ...$x ) { return (object) $x; }
-
-This simplifies structures:
-	$O = obj( name:'harry', job:'developer' );
-	echo $O->name . ' is a ' . $O->job;
-
-And prePHP parsing allows for:
-	$O = { name:'harry', job:'developer' }; //javascript style syntax
-	echo $O.name . ' is a ' . $O.job;
-
-It is clear how this syntactical simplification contributes to readibility, 
-and less cross language barriers.
-
-
-Polymorhism
------------
-
-This is allowing multiple defintions on a single function name, and then mapping particular definitions
-to particular structures. In OO this usually is done through abstract classes and extended implementations.
-But another concept is fairly well defined - function overloading. This is where the mapping is done based
-on the type of the variables the function is called with, and the types of variables the functions accepts.
-In OO the namespace problem is approached from the variable's persepctive:
-	circle.draw();
-where circle is some object, an instantiation of a Cirlce class, which is derived from perhaps a Shape class.
-Typically the Shape class presents an abstract draw() method.
-
-In a non-OO domain, a draw() function would be defined, which accepts as argument, a particular shape:
-	draw( circle );
-The instruction flow more naturally with the verb before the noun.
-prePHP allows for the redeclaration of the function draw() (using the 'overload' keyword), 
-where each version would accept a different type of value.
-	overload function draw( circle $S ) { }
-	overload function draw( square $S ) { }
-	...etc.
-Note important differences here. First, the selection of the function to be executed, 
-the overload resolution, happens NOT on the type of the variable, but on the type of the data in the variable.
-This takes advantage of the "untyped" nature of PHP. All values in PHP have a type, but the type is associated 
-with the value, and not the variable - the container, in which the value is stored.
-And then the overload resolution happens at runtime, not compile time.
-
-I could define structures now as follows:
-	$circle = {_type:'circle', x:100, y:100, radius:30};
-or
-	$circle = struct( circle: { x:100, y:100, radius:30 } );
-Then to define a function to draw it:
-	function draw( circle $c ) { }
-
-
-
-To do:
-extending/overriding an overloaded function
-move router to end of script to preserve line numbers
-
 <?php
 
-	
-	
-
-	//just an example of a simplified for-loop syntax
+	//just an example of a simplified for-loop syntax	
 		for $i = 1..10 {echo $i;} 
 		echo '<br>';
-		disp( { one:1, two:2 } ); //is obj if precede with (,=
+ 	//you cannot use $i in terminal value like for $i = 1..$i+1 - it will go into infinite loop.
+	
+	disp( { one:1, two:2 } ); //is obj if precede with (,=
 
-	//simplified function definitions: 'is given by'
+		//simplified function definitions: 'is given by'
 	//also works for lamdas:  array_map( ($x) ==> ...
 		add($a, $b) ==> $a + $b;  // fat-arrow functions 
 		add2($a, $b) ==> { return $a + $b; } // fat-arrow function with {body}
@@ -121,7 +24,7 @@ move router to end of script to preserve line numbers
 		echo xstr( 1 ) . '<br>';
 		//If you uncomment the next instruction, it nullify the above extensions,
 		//and the output of the above echo changes accordingly
-			//override xstr( $x ) ==> $x;
+			override xstr( $x ) ==> xstr_($x);
 		//You cannot use the fn_() form to access an extended version in an overridden version.
 		//You cannot use a particular version, override it, and then use the overridden version.
 		//Overriding or extending a function does so globally !!!
@@ -150,6 +53,8 @@ move router to end of script to preserve line numbers
 	overload val( string $s ) ==> 'sval=' . $s;		// should be called for strings	
 	
 	//extend valtype() to return some custom type based on some arbitrary condition
+	//valtype() can only be extended, never overloaded!!!
+	//this is because valtype is used to resolve overloads, which will loop...
 	extend valtype( $v ) ==> $v === 1 ? 'number' : valtype_($v);
 	// returns "number integer string"
 	display( valtype(1), valtype(2), valtype( 'xxx' ) ); 
@@ -231,7 +136,6 @@ move router to end of script to preserve line numbers
 
 	disp( splitt( ',', overload_type_expression( 'a|b_1|2' ) ) );
 
-
 	//There are alternative mechanisms in native PHP, which allows polymorhism inside a function.
 	//The first uses getType() on an untyped parameter, which will return the type of the value passed  
 	//( which is the basis for valtype() ).
@@ -258,7 +162,6 @@ move router to end of script to preserve line numbers
 	//It also does not isolate previously written code like an overload approach does.
 //--------
 
-
 	//You can change the type of a struct by simply calling struct() again, or by setting _type.	
 	$s = struct( { name: 'harry' } ); //untyped - disp() as stdClass
 	disp($s);
@@ -267,6 +170,4 @@ move router to end of script to preserve line numbers
 	disp( $s );
 	overload str( boss $s ) ==> 'His Great ' . strtoupper($s.name);
 	overload str( staff $s ) ==> 'Hardworking Staff ' . strtoupper($s.name);
-
-
 ?>
