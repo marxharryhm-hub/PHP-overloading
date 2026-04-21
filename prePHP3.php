@@ -1,12 +1,12 @@
 <?php
-	$prePHP = obj( version: '3.0', update: 'built: 12 April 2026 - implements OOX' );
+	$prePHP = obj( version: '3.2', update: 'built: 12 April 2026 - implements OOX' );
 	
 	$prePHP->FUNCTIONS = [];	
 
-	//these are functions not affected by OOX, and do not use OOX
+	//these are functions not affected by OOX
 	function obj( ...$p ){ return (object)$p; }
 	function struct( ...$T ) { 
-		$t = array_key_first($T); $T[$t]->_type = $t; return $T[$t]; 
+		$t = array_key_first($T); $T[$t]->_type = $t ?: null; return $T[$t]; 
 	 }	
 	function substring( $s, $from, $to=-1 ) {
 		if ( is_string( $from ) ) { 
@@ -88,7 +88,7 @@
 	 }
 	function split( $d, $s, $n=0 ) { 
 		$r = $n ? explode( $d, $s, $n ) : explode( $d, $s );		
-		for( $i = 0; $i < $n; $i++ ) $r[$i] = null;
+		for( $i = 0; $i < $n; $i++ ) $r[$i] ??= null;
 		return $r;
 	 }	 
 	function splitt( $d, $s, $n=0 ) { //trimmed and no empty elements		
@@ -114,7 +114,7 @@
 			return 'array';
 		}
 		if ( gettype( $v ) == 'object') {		
-			if ( isset( $v->_type ) ) return $v->_type;
+			if ( isset( $v->_type ) && $v->_type ) return $v->_type;
 			if ( count( get_class_methods($v) ) == 0 ) return 'record'; //objects with no methods
 			return strtolower( get_class($v) );
 		}
@@ -141,160 +141,12 @@
 			else $t .= $k . ':\'' . $v .'\',';
 		return $T . ':{' . $t . '}';
 	 }
-
-	//these are functions that may be affected by OOX, but may not use OOX
-	$prePHP->script[] = <<<'volitile'
-		
-		function disp( ...$x ) { 
-			foreach ( $x as $i => $xx ) {
-				if ( $i ) echo ' ';
-				echo str( $xx );
-			}
-			echo '<br>';
-		 }
-		function formstr( $template, $params, $trunc = true ) {
-			/*	
-				{name} {name%9} {name%9.9} {name%x9.9} where x can be: n/d/s/f
-				%n	number %n99.9 never truncated
-				%n,	number with thousands separator
-				%d	date 'yyyy-mm-dd HH`hmi:ss dow Month Mon fff yy hh m h w' never truncated
-				%s	string
-				%f	sprintf()	
-			*/
-
-			if ( is_array( $params ) ) $params = (object) $params;
-			//does the template provide defaults?
-			if ( preg_match_all( '/\{(\w*)=([^}]*)/', $template, $M, PREG_SET_ORDER + PREG_OFFSET_CAPTURE   ) ) {
-				foreach ( $M as $m ) $params->{$m[1][0]} ??= $m[2][0]; //keep first value			
-				foreach ( array_reverse( $M ) as $m ) {
-					$template = substr_replace( $template, '', $m[2][1]-1, strlen($m[2][0] )+1 );
-				}
-			}
-			foreach ( $params as $k => $v ) {
-				$v = trim( str($v) );
-				$template = str_replace( '{' . $k . '}', $v, $template ); // {n}			
-				$i = 0;
-				while ( ( $i = strpos( $template, '{'.$k.'%', $i ) ) !== false ) { 				
-					$j = strpos( $template, '}', $i );
-					$fs = substring( $template, $i + strlen($k) + 2 , $j-1);				
-					[$w,$d] = split( '.', $fs, 2, true );	
-					$trunc_ = $trunc;
-					if ( $w[0] === 'n' ) { //never truncated: %n99.9 %n99.9
-						$trunc_ = false;
-						$w = substr( $w, 1 );
-						if ($w[0] === ',') { 
-							$w = substr( $w, 1);						
-							$W = abs($w);
-							if (!$d) $d = 0;						
-							$D = strpos( $v, '.'); if ( $D < 0 ) $D = strlen($v);  								
-							$v = number_format( $params[$k], $d, '.', ',' );
-							if ( $d && strlen($v) < $W && strpos( $v, '.' ) < 0 ) $v .= '.';
-							while ( strlen($v) < $W && strlen($v) - strpos( $v, '.' ) <= $d ) $v .= '0';
-							if ( $w < 0 ) while ( strlen($v) < $W ) $v = ' ' + $v;	
-
-						} else {
-							$W = abs($w);
-							if (!$d) $d = 0;						
-							$v = number_format( $params[$k], 0, '.', '' );
-							$D = strpos( $v, '.' ); if ( $D < 0 ) $D = strlen($D);  
-							$v = number_format( $params[$k], $d, '.', '' );
-							if ( $d && strlen($v) < $W && strpos( $v, '.' ) < 0 ) $v .= '.';
-							while ( strlen($v) < $W && strlen($v) - strpos( $v, '.' ) <= $d ) $v .= '0';
-							if ( $w < 0 ) while ( strlen($v) < $W ) $v = ' ' . $v;
-						}
-
-					}
-					elseif ( $w[0] === 'd' ) { // never truncated: %d10.yyyy-mm-dd hh24:mi:si}	
-						$w = substr( $w, 1 );
-						if ($w) $W = abs($w);
-						$date = $params[$k];
-						$v = '';					
-						if (!$d) $d = 'yyyy-mm-dd HH`hmi:ss dow';
-						while ($d) {
-							if ( str_starts_with( $d, 'Month' ) )   { $v .= date( 'F', $date ); $d = substr( $d, 5 ); }
-							elseif ( str_starts_with( $d, 'yyyy') ) { $v .= date( 'Y', $date ); $d = substr( $d, 4 ); }
-							elseif ( str_starts_with( $d, 'fff' ) ) { $v .= date( 'u', $date ); $d = substr( $d, 3 ); }
-							elseif ( str_starts_with( $d, 'Mon' ) ) { $v .= date( 'M', $date ); $d = substr( $d, 3 ); }
-							elseif ( str_starts_with( $d, 'dow' ) ) { $v .= date( 'D', $date ); $d = substr( $d, 3 ); }
-							elseif ( str_starts_with( $d, 'yy' ) )  { $v .= date( 'y', $date ); $d = substr( $d, 2 ); }
-							elseif ( str_starts_with( $d, 'mm' ) )  { $v .= date( 'm', $date ); $d = substr( $d, 2 ); }						
-							elseif ( str_starts_with( $d, 'dd' ) )  { $v .= date( 'd', $date ); $d = substr( $d, 2 ); }						
-							elseif ( str_starts_with( $d, 'HH' ) )  { $v .= date( 'H', $date ); $d = substr( $d, 2 ); }
-							elseif ( str_starts_with( $d, 'hh' ) )  { $v .= date( 'h', $date ); $d = substr( $d, 2 ); }						
-							elseif ( str_starts_with( $d, 'mi' ) )  { $v .= date( 'i', $date ); $d = substr( $d, 2 ); }
-							elseif ( str_starts_with( $d, 'ss' ) )  { $v .= date( 's', $date ); $d = substr( $d, 2 ); }						
-							elseif ( str_starts_with( $d, 'm' ) )   { $v .= date( 'n', $date ); $d = substr( $d, 1 ); }						
-							elseif ( str_starts_with( $d, 'h' ) )   { $v .= date( 'g', $date ); $d = substr( $d, 1 ); }						
-							elseif ( str_starts_with( $d, 'w' ) )   { $v .= date( 'w', $date ); $d = substr( $d, 1 ); }						
-							elseif ( str_starts_with( $d, '`' ) )   { $v .= $d[1]; $d = substr( $d, 2 ); }
-							else { $v .= $d[0]; $d = substr( $d, 1 ); }
-						}
-
-					}
-					elseif ( $w[0] === 's' ) { // %10
-						$w = substr( $w, 1 ); 
-						$W = abs($w);
-						if ( $w < 0 ) while ( strlen($v) < $W ) $v = ' ' + $v;
-						else while ( strlen($v) < $W ) $v .= ' ';
-					}
-					elseif ( $w[0] === 'f' ) { //%f.2f
-						$w = substr( $w, 1 ); 
-						$v = sprintf( $w, $params[$k] );
-					}
-					else { // %10 // %10.1	
-						$W = abs( $w );
-						if ( is_numeric( $d ) && is_numeric( $v ) ) $v = '' . round( $v, $d );									
-						if ( $w < 0 ) while ( strlen($v) < $W ) $v = ' ' . $v;
-						else while ( strlen($v) < $W ) $v .= ' ';					
-					}
-					
-					if ( isset( $W ) && $trunc_ && strlen($v) > $W ) $v = substr( $v, 0, $W ); 
-					$template = substring_replace( $template, $v, $i, $j );
-				}
-			}
-			return $template;
-		 } 
-		function str( $x ) { 
-			if ($x === null) return 'null';
-			if ($x === true) return 'true';
-			if ($x === false) return 'false';
-			return print_r( $x, true ); 
-		 }	
-		function _route_( $fn, ...$x) {
-			$type_signature = join( '_', array_map( fn($x) => valtype($x), $x ) );
-			foreach ( splitt( ',', overload_type_expression( $type_signature ) ) as $sig ) { 
-				$f = '_o_' . $fn . '_' . $sig;
-				while ( $f ) {
-					try { return $f( ...$x ); } catch (	Throwable $ex ) {
-						$e = $ex->getMessage();
-						if ( ! str_contains( $e, 'undefined function' ) )
-							throw new Exception( 'in overload function:' . $f . '(): ' . $e );
-					}
-					$f = substr( $f, 0, strrpos( $f, '_' ) );
-					if ( str_ends_with( $f, $fn ) ) break;
-				}
-			}
-			//$f = substr( $f, 3 );//we are on the router itself
-			try { return $fn( ...$x ); } catch ( Throwable $ex ) {
-				$e = $ex->getMessage();
-				if ( str_contains( $e, 'undefined function' ) )
-					throw new exception ( 'overload signature not found: ' . $fn .'(' .
-						join( ', ', array_map( fn($x) => valtype($x), $x ) ) . ')' );
-			
-				throw new Exception( 'in overload function:' . $f . '(): ' . $e );
-			}			
-		 }			 
-	
-	volitile;
-
-	function _extended_( $f, ...$x ) {		
-		$ff = split('_', $f);
-		if ( $ff[2] === '1' ) return $ff[3]( ...$x );
-		$ff[2]--;
-		$f = join('_', $ff );
-		return $f( ...$x );
+	function str( $x ) { 
+		if ($x === null) return 'null';
+		if ($x === true) return 'true';
+		if ($x === false) return 'false';
+		return print_r( $x, true ); 
 	 }
-
 	function hideNCS( $s ) {
 		$L = strlen( $s ); 
 		$q = null;
@@ -328,7 +180,6 @@
 		}	
 		return $s;
 	 };	
-
 	function split_param_types( $ps ) {
 		$ps = splitt(',', $ps );
 		$types = [];
@@ -350,6 +201,142 @@
 		}	
 		return [ join( '_', $types ), join(', ', $vars ) ] ;
  	 } 
+	function disp( ...$x ) { 		
+		foreach ( $x as $i => $xx ) {
+			if ( $i ) echo ' ';
+			echo __call( 'str',  $xx ); //to use OOX versions of a function in this file
+		}
+		echo '<br>';
+	 }
+	function formstr( $template, $params, $trunc = true ) {
+		/*	
+			{name} {name%9} {name%9.9} {name%x9.9} where x can be: n/d/s/f
+			%n	number %n99.9 never truncated
+			%n,	number with thousands separator
+			%d	date 'yyyy-mm-dd HH`hmi:ss dow Month Mon fff yy hh m h w' never truncated
+			%s	string
+			%f	sprintf()	
+		*/			
+
+		if ( is_array( $params ) ) $params = (object) $params;
+		//does the template provide defaults?
+		if ( preg_match_all( '/\{(\w*)=([^}]*)/', $template, $M, PREG_SET_ORDER + PREG_OFFSET_CAPTURE   ) ) {
+			foreach ( $M as $m ) $params->{$m[1][0]} ??= $m[2][0]; //keep first value			
+			foreach ( array_reverse( $M ) as $m ) {
+				$template = substr_replace( $template, '', $m[2][1]-1, strlen($m[2][0] )+1 );
+			}
+		}
+		foreach ( $params as $k => $v ) {
+			$v = trim( __call( 'str', $v ) );  //to use OOX versions of a function here
+			$template = str_replace( '{' . $k . '}', $v, $template ); // {n}			
+			$i = 0;
+			while ( ( $i = strpos( $template, '{'.$k.'%', $i ) ) !== false ) { 				
+				$j = strpos( $template, '}', $i );
+				$fs = substring( $template, $i + strlen($k) + 2 , $j-1);				
+				[$w,$d] = split( '.', $fs, 2, true );	
+				$trunc_ = $trunc;
+				if ( $w[0] === 'n' ) { //never truncated: %n99.9 %n99.9
+					$trunc_ = false;
+					$w = substr( $w, 1 );
+					if ($w[0] === ',') { 
+						$w = substr( $w, 1);						
+						$W = abs($w);
+						if (!$d) $d = 0;						
+						$D = strpos( $v, '.'); if ( $D < 0 ) $D = strlen($v);  								
+						$v = number_format( $params[$k], $d, '.', ',' );
+						if ( $d && strlen($v) < $W && strpos( $v, '.' ) < 0 ) $v .= '.';
+						while ( strlen($v) < $W && strlen($v) - strpos( $v, '.' ) <= $d ) $v .= '0';
+						if ( $w < 0 ) while ( strlen($v) < $W ) $v = ' ' + $v;	
+
+					} else {
+						$W = abs($w);
+						if (!$d) $d = 0;						
+						$v = number_format( $params[$k], 0, '.', '' );
+						$D = strpos( $v, '.' ); if ( $D < 0 ) $D = strlen($D);  
+						$v = number_format( $params[$k], $d, '.', '' );
+						if ( $d && strlen($v) < $W && strpos( $v, '.' ) < 0 ) $v .= '.';
+						while ( strlen($v) < $W && strlen($v) - strpos( $v, '.' ) <= $d ) $v .= '0';
+						if ( $w < 0 ) while ( strlen($v) < $W ) $v = ' ' . $v;
+					}
+
+				}
+				elseif ( $w[0] === 'd' ) { // never truncated: %d10.yyyy-mm-dd hh24:mi:si}	
+					$w = substr( $w, 1 );
+					if ($w) $W = abs($w);
+					$date = $params[$k];
+					$v = '';					
+					if (!$d) $d = 'yyyy-mm-dd HH`hmi:ss dow';
+					while ($d) {
+						if ( str_starts_with( $d, 'Month' ) )   { $v .= date( 'F', $date ); $d = substr( $d, 5 ); }
+						elseif ( str_starts_with( $d, 'yyyy') ) { $v .= date( 'Y', $date ); $d = substr( $d, 4 ); }
+						elseif ( str_starts_with( $d, 'fff' ) ) { $v .= date( 'u', $date ); $d = substr( $d, 3 ); }
+						elseif ( str_starts_with( $d, 'Mon' ) ) { $v .= date( 'M', $date ); $d = substr( $d, 3 ); }
+						elseif ( str_starts_with( $d, 'dow' ) ) { $v .= date( 'D', $date ); $d = substr( $d, 3 ); }
+						elseif ( str_starts_with( $d, 'yy' ) )  { $v .= date( 'y', $date ); $d = substr( $d, 2 ); }
+						elseif ( str_starts_with( $d, 'mm' ) )  { $v .= date( 'm', $date ); $d = substr( $d, 2 ); }						
+						elseif ( str_starts_with( $d, 'dd' ) )  { $v .= date( 'd', $date ); $d = substr( $d, 2 ); }						
+						elseif ( str_starts_with( $d, 'HH' ) )  { $v .= date( 'H', $date ); $d = substr( $d, 2 ); }
+						elseif ( str_starts_with( $d, 'hh' ) )  { $v .= date( 'h', $date ); $d = substr( $d, 2 ); }						
+						elseif ( str_starts_with( $d, 'mi' ) )  { $v .= date( 'i', $date ); $d = substr( $d, 2 ); }
+						elseif ( str_starts_with( $d, 'ss' ) )  { $v .= date( 's', $date ); $d = substr( $d, 2 ); }						
+						elseif ( str_starts_with( $d, 'm' ) )   { $v .= date( 'n', $date ); $d = substr( $d, 1 ); }						
+						elseif ( str_starts_with( $d, 'h' ) )   { $v .= date( 'g', $date ); $d = substr( $d, 1 ); }						
+						elseif ( str_starts_with( $d, 'w' ) )   { $v .= date( 'w', $date ); $d = substr( $d, 1 ); }						
+						elseif ( str_starts_with( $d, '`' ) )   { $v .= $d[1]; $d = substr( $d, 2 ); }
+						else { $v .= $d[0]; $d = substr( $d, 1 ); }
+					}
+
+				}
+				elseif ( $w[0] === 's' ) { // %10
+					$w = substr( $w, 1 ); 
+					$W = abs($w);
+					if ( $w < 0 ) while ( strlen($v) < $W ) $v = ' ' + $v;
+					else while ( strlen($v) < $W ) $v .= ' ';
+				}
+				elseif ( $w[0] === 'f' ) { //%f.2f
+					$w = substr( $w, 1 ); 
+					$v = sprintf( $w, $params[$k] );
+				}
+				else { // %10 // %10.1	
+					$W = abs( $w );
+					if ( is_numeric( $d ) && is_numeric( $v ) ) $v = '' . round( $v, $d );									
+					if ( $w < 0 ) while ( strlen($v) < $W ) $v = ' ' . $v;
+					else while ( strlen($v) < $W ) $v .= ' ';					
+				}
+				
+				if ( isset( $W ) && $trunc_ && strlen($v) > $W ) $v = substr( $v, 0, $W ); 
+				$template = substring_replace( $template, $v, $i, $j );
+			}
+		}
+		return $template;
+	 } 
+				
+	function __call( $fn, ...$X ) {
+			global $prePHP;
+			if ( $fn === 'valtype' || str_starts_with( $fn, '-valtype' ) ) $sigx = '';	//can only be extended, never overloaded
+			else $sigx = join( '_', array_map( fn($x) => __call( 'valtype', $x ), $X ) );		
+			$fnx = false;
+			if ( $fn[0] === '-' ) { $fnx = substr( $fn,1 ); $fn = substr( $fn,1, -3 ); }
+
+			foreach( explode( ',', overload_type_expression( $sigx ) ) as $sig ) {
+				for(;;) {
+					if ( isset ( $prePHP->FUNCTIONS[$fn][$sig] ) ) {
+						if ( $fnx ) { 
+							if ( ( $n = array_search( $fnx, $prePHP->FUNCTIONS[$fn][$sig] ) ) === false ) break;
+							if ( --$n < 0 ) break;
+						} else {						
+							$n = count( $prePHP->FUNCTIONS[$fn][$sig] ) - 1;							
+						}
+						return $prePHP->FUNCTIONS[$fn][$sig][$n](...$X);
+					}
+					if ( !$sig ) break;
+					$sig = substr( $sig, 0, strrpos( $sig, '_' ) );
+				}
+			}
+			if ( function_exists ( $fn) ) return $fn( ...$X );
+			throw new exception( 'overload signature not found:' . $fn . '(' . 
+				join( '_', array_map( fn($x) => valtype($x), $X ) )	.')' );		
+		 }
 
 	function prePHP( $file=null, $src=null ) { global $prePHP;
 		if ( $file ) {
@@ -365,8 +352,7 @@
 			$j--;
 			$php = substr( $src, $i, $j - $i + 1 );
 			$php = hideNCS( $php );
-			
-						
+								
 			//for each library to be imported:
 				if ( preg_match_all( '/[\n\r]\s*require/', $php, $M, PREG_OFFSET_CAPTURE + PREG_SET_ORDER ) ) {	
 					foreach ( $M as $m ) { 	
@@ -387,127 +373,96 @@
 				$q = -1;
 				while ( ( $q = strpos( $php, '==>', $q+1 ) ) !== false ) {
 					$p = strposrev( $php, '(', $q );
-					while ( $php[$p] > ' ' ) $p--;
-					for ( $m = $q+3; $php[$m] <= ' '; $m++ );
-					if ( $php[$m] !== '{' ) {
-						$m = strpos( $php, ';', $m );
-						$php = substr_replace( $php, '}', $m+1, 1 );
-						$php = substr_replace( $php, '{ return ', $q, 4 );
-					} else
-						$php = substr_replace( $php, '', $q-1, 4 );
-					$php = substr_replace( $php, 'function ', $p+1, 0 );
+					if ( $php[$p-1] > ' ' ) {
+						while ( $php[$p] > ' ' ) $p--;
+						for ( $m = $q+3; $php[$m] <= ' '; $m++ );
+						if ( $php[$m] !== '{' ) {
+							$m = strpos( $php, ';', $m );
+							$php = substr_replace( $php, '}', $m+1, 1 );
+							$php = substr_replace( $php, '{ return ', $q, 4 );
+						} else
+							$php = substr_replace( $php, '', $q-1, 4 );					
+						$php = substr_replace( $php, 'function ', $p+1, 0 );
+					}
 				}	
 			
 			//lambda functions:	()==>    
 				// here the left bracket must be preceded with a space
-				$php = preg_replace( '/\W(\([^()]*\)\s*)==>/', ' fn$1 =>', $php );
+				$php = preg_replace( '/\W(\([^()]*\)\s*)==>/', ' fn$1=>', $php );
 
 			//for $i=1..10 { :
 				$php = preg_replace( '/\bfor\s+(\$[^=]+)=([^.]+)\.\.([^{]+)/', 
 					'for ( $1 = $2; $1 <= $3; $1++) ', $php );
 
 			//OOX: overload/override/extend function str():
-				if ( preg_match_all( '/[\n\r]\s*(override|extend|overload)\s+(function)\s+(\w+)/', 
-					$php, $M, PREG_OFFSET_CAPTURE + PREG_SET_ORDER ) ) {				
+				if ( preg_match_all( '/[\n\r]\s*(overload|override|extend)\s+(function)\s+(\w+)/', 
+					$php, $M, PREG_OFFSET_CAPTURE + PREG_SET_ORDER ) ) {	
 					$d = 0;
-					foreach ( $M as $m ) {				
-							//over... func... strx(    ) { }
-							//p       q       f   h    k   g 
-							//                    fx........ 
-							//                     ps..
-							//tag....         fn..
-						$p = $m[1][1] + $d;
-						$q = $m[2][1] + $d;
-						$f = $m[3][1] + $d;
-						$h = strpos( $php, '(', $f );
-						$k = strpos( $php, ')', $h );
-						$g = str_paired( $php, $f, '{','}' );
-						$tag = $m[1][0];
-						$fn = $m[3][0];	
-						$fx = substr( $php, $h, $g - $h + 1 );
-						$ps = substr( $php, $h+1, $k - $h - 1 );
-						$n = $prePHP->FUNCTIONS[$fn][0] ?? 0; //get last index used for this fn				
-						switch ($tag) {
-						case 'override': case 'extend':	
-							$n++;
-							$FX = '_o_' . $n . '_' . $fn;
-							$prePHP->FUNCTIONS[ $fn ] = [ $n, $FX . '(' ]; 							
-							if ( $tag === 'extend' ) {
-								$fx = preg_replace( '/\b'.$fn.'_\(/', '_extended_( __function__ ,', $fx );
-								$FX = 'function ' . $FX . $fx;
-								$php = substr_replace( $php, $FX, $p, $g - $p + 1);					
-								$d += strlen( $FX ) - ( $g - $p + 1 );
-							} else {
-								$FX = 'function ' . $FX;
-								$php = substr_replace( $php, $FX, $p, $h - $p );					
-								$d += strlen( $FX ) - ( $h - $p );
-							}
-							break;
-						case 'overload':
-							[$tx, $ps] = split_param_types( $ps );
-
-							//union types: str( integer|float $n ) {}  .......?
-							//    a|b_c|d		
-							$fx = substr( $php, $k + 1, $g - $k);
-							foreach ( splitt( ',', overload_type_expression( $tx ) ) as $n => $sig ) { 
-								if ( $n === 0 ) {
-									$prePHP->FUNCTIONS[ $fn ] = [ 1, "_route_('{$fn}', " ];
-									$FX = '_o_'. $fn . '_' . $sig;									
-									$FX = 'function ' . $FX . '(' . $ps . ')';
-									$php = substr_replace( $php, $FX , $p, $k - $p + 1 );	
-									$d += strlen( $FX ) - ( $k - $p + 1 );
-								}
-								else {
-									$FX = '_o_' . $fn . '_' . $sig;
-									$FX = 'function ' . $FX . '(' . $ps . ')';
-									$prePHP->script[0] .= "\n" . $FX . $fx . "\n";
-								}			
-							}							
-							break;
-						} //switch						
-					} //next match
-				} //if OOX		
-
+					foreach ( $M as $m ) {			
+						$p = $m[1][1] + $d;				//   over_l function xxx( type $x ) 			
+						$k = strpos( $php, '(', $p );	//   p                  k         q 
+						$q = strpos( $php, ')', $k );	//                    fn     ps							
+						$fn = $m[3][0];			
+						$ps = trim( substring( $php, $k+1, $q-1 ) );
+						$ts = '';
+						if ( $m[1][0] === 'overload' ) {				
+							[$ts, $ps] = split_param_types( $ps );
+							$ts = overload_type_expression( $ts );
+						}
+						$n = $prePHP->FUNCTIONS[ $fn ][ 0 ] ?? 1; 		
+						$prePHP->FUNCTIONS[ $fn ][ 0 ] = $n + 1;
+						foreach( explode(',', $ts) as $t ) $prePHP->FUNCTIONS[ $fn ][ $t ][] = "{$fn}_{$n}_";
+						$fx = "function {$fn}_{$n}_({$ps})";
+						$php = substring_replace( $php, $fx, $p, $q );						
+						$d += strlen( $fx ) - ($q - $p + 1);						
+					}
+				}
+		
 			// new inline object syntax: {x:'ex'}			
 				$p = 0;
 				while ( ( $p = strpos( $php, '{' , $p+1 ) ) !== false ) { // [=(,] { name:'harry' }
-					if ( $php[ $p+1 ] !== '$' ) { // not {$...}						
-						for ( $k = $p - 1;  $k > 0 && ord( $php[$k] ) <= 32; $k--);
-						switch ( $php[$k] ) {
-						case ':': case '=': case '(': case ',': 
-							$q = str_paired( $php, $p );							
-							$php[$q] = ')';
-							$php = substr_replace( $php, 'obj(', $p, 1 );
+					//must be '{name:'
+					if ( $php[ $p+1 ] !== '$' ) { // not {$...}
+						for ( $q = $p + 1;  $php[$q] <= 32; $q++);
+						for (; $php[$q] > 32; $q++);
+						if ( $php[$q-1] == ':' ) {
+							for ( $k = $p - 1;  $k > 0 && $php[$k] <= ' '; $k--);
+							switch ( $php[$k] ) {
+							case ':': case '=': case '(': case ',': 
+								$q = str_paired( $php, $p );							
+								$php[$q] = ')';
+								$php = substr_replace( $php, 'obj(', $p, 1 );
+							}
 						}
 					}
 				}
 
 			// new OO dot operator, only $object.member, not  $o[$i].mem
 				$php = preg_replace( '/(\$[\w._]+)\.(\w)/', '$1->$2', $php );			
-			
+							
 			$src = substr_replace( $src, $php, $i, $j - $i + 1 );
 		} //while
 		
 
 		$prePHP->script[ $file ] = $src;
 	 } //function prePHP
-
-	//deref scripts: we do this in a function to keep its variables local
+	
 	function deref() { global $prePHP;
 		foreach ( $prePHP->script as $f => $src ) {
-
 			if ( $f === 0 ) $src = "<?php\n" . $src. "\n?>";
-
 			$i = -1; //for each php block in the file
 			while ( ( $i = strpos( $src, '<?php', $i+1 ) ) !== false ) {
 				$i += 5;
 				$j = strpos( $src, '?>', $i ) ?: strlen( $src ) + 1;
 				$j--;
 				$php = substr( $src, $i, $j - $i + 1 );
-				foreach ( $prePHP->FUNCTIONS as $fn => $x) {			
+				foreach( $prePHP->FUNCTIONS as $fn => $fx ) {
+					$FN = '__call( \'' . $fn . '\',';
 					$php = preg_replace_callback( '/function\s+'.$fn.'\(|\b('.$fn.')\(/', 
-						function ( $m ) use( $x ) {	return isset( $m[1] ) ? $x[1] : $m[0]; }, 
-					$php ); //the callback is a variable length negative lookbehind ignoring 'function fn()\s+'
+						function ( $m ) use( $FN ) { return isset( $m[1] ) ? $FN : $m[0]; }, 
+						$php 
+					); 
+					$php = preg_replace( '/\b'.$fn.'_\(/', '__call( \'-\'.__function__ ,', $php  );
 				}
 				$php = unhide( $php );
 				$src = substr_replace( $src, $php, $i, $j - $i + 1 );
@@ -520,11 +475,17 @@ $prePHP->script_name = $_SERVER['SCRIPT_FILENAME']; // get the script being call
 prePHP( file: $prePHP->script_name );	//get the script to be executed
 deref();
 
+//echo '<pre>'; print_r( $prePHP->FUNCTIONS ); die;
+//echo '<pre>'; print_r( $prePHP->script ); die;
+//print_r( split( "\n", $prePHP->script[ $prePHP->script_name ] ) ); die;
+
 foreach ( $prePHP->script as $_filename_ => $_script_ ) {
 	try { 
 		eval( '?>' . $_script_ ); 		
 	} catch ( throwable $ex ) { 
-		echo $ex; 		
+		echo $ex; 
+		echo '<pre>';
+		print_r( split( "\n", $prePHP->script[ $_filename_ ] ) ); 
 		die;
 	}
 }
