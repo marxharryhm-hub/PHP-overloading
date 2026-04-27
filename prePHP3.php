@@ -1,9 +1,9 @@
 <?php
-	$prePHP = obj( version: '3.2', update: 'built: 12 April 2026 - implements OOX' );
+	$prePHP = obj( version: '3.3', update: 'built: 27 April 2026 - implements OOX' );
 	
 	$prePHP->FUNCTIONS = [];	
 
-	//these are functions not affected by OOX
+	//these are functions not affected by OOX, and do not use OOX
 	function obj( ...$p ){ return (object)$p; }
 	function struct( ...$T ) { 
 		$t = array_key_first($T); $T[$t]->_type = $t ?: null; return $T[$t]; 
@@ -25,7 +25,8 @@
 	function str_paired( $s, $i=0, $bra=null, $ket=null ) {
 			if ( gettype( $i ) == 'string' ) $i = strpos( $s, $i ); 
 			if ( $i === false ) return false;
-			if ( $i < 0 ) $i += strlen( $s );
+			if ( $i < 0 ) $i += strlen( $s );			
+
 			if ( $bra == null ) { // grap first bracketable char
 				$q = null;
 				for(; $i < strlen($s); $i++) {
@@ -51,6 +52,25 @@
 				}
 			}
 			if ( $ket == null ) return false;
+
+			if ( strlen( $bra ) > 1 || strlen( $ket ) > 1 ) { 	
+				$j = --$i; 				
+				$i = strpos( $s, $bra, $i+1 ); 
+				$j = strpos( $s, $ket, $j+1 );  
+				$n = 1;
+				redo:
+					if ( $i !== false && $i < $j) {
+						$n++;
+						$i = strpos( $s, $bra, $i+1 );
+						goto redo;
+					}
+					if ( $j !== false && ( $j < $i || $i === false) ) {
+						$n--; if ( $n <= 1 ) return $j;
+						$j = strpos( $s, $ket, $j+1 );
+						goto redo;
+					}
+				return $n <= 1 ? $j : false;
+			}
 
 			$n = 0;
 			$q = null;
@@ -91,10 +111,10 @@
 		for( $i = 0; $i < $n; $i++ ) $r[$i] ??= null;
 		return $r;
 	 }	 
-	function splitt( $d, $s, $n=0 ) { //trimmed and no empty elements		
+	function splitt( $d, $s, $n=0, $default=null ) { //trimmed and no empty elements		
 		$r = $n ? explode( $d, $s, $n ) : explode( $d, $s );
 		$r = array_filter( array_map( 'trim', $r ) );
-		for( $i = 0; $i < $n; $i++ ) $r[$i] ??= null;		
+		for( $i = 0; $i < $n; $i++ ) $r[$i] ??= $default;		
 		return $r;
 	 }
 	function hide( $s ) {
@@ -204,7 +224,7 @@
 	function disp( ...$x ) { 		
 		foreach ( $x as $i => $xx ) {
 			if ( $i ) echo ' ';
-			echo __call( 'str',  $xx ); //to use OOX versions of a function in this file
+			echo __call( 'str',  $xx ); //to use OOX versions of a function
 		}
 		echo '<br>';
 	 }
@@ -227,7 +247,8 @@
 			}
 		}
 		foreach ( $params as $k => $v ) {
-			$v = trim( __call( 'str', $v ) );  //to use OOX versions of a function here
+			$v = trim( __call( 'str', $v ) );  //to use OOX versions of a function
+			if ( is_numeric($k) ) $k++;
 			$template = str_replace( '{' . $k . '}', $v, $template ); // {n}			
 			$i = 0;
 			while ( ( $i = strpos( $template, '{'.$k.'%', $i ) ) !== false ) { 				
@@ -352,6 +373,7 @@
 			$j--;
 			$php = substr( $src, $i, $j - $i + 1 );
 			$php = hideNCS( $php );
+
 								
 			//for each library to be imported:
 				if ( preg_match_all( '/[\n\r]\s*require/', $php, $M, PREG_OFFSET_CAPTURE + PREG_SET_ORDER ) ) {	
@@ -391,8 +413,14 @@
 				$php = preg_replace( '/\W(\([^()]*\)\s*)==>/', ' fn$1=>', $php );
 
 			//for $i=1..10 { :
-				$php = preg_replace( '/\bfor\s+(\$[^=]+)=([^.]+)\.\.([^{]+)/', 
-					'for ( $1 = $2; $1 <= $3; $1++) ', $php );
+				$php = preg_replace_callback( '/\bfor\s+\$([^=]+)=([^.]+)\.\.([^{]+)/', 
+					function ($m) {
+						$i = trim($m[1]);
+						$i0 = trim($m[2]);
+						$i9 = trim($m[3]);
+						return '$'.$i.$i.' = '.$i9.'; for( $'.$i.'='.$i0.'; $'.$i.' <= $'.$i.$i.'; $'.$i.'++ )' ;
+					},
+					$php );
 
 			//OOX: overload/override/extend function str():
 				if ( preg_match_all( '/[\n\r]\s*(overload|override|extend)\s+(function)\s+(\w+)/', 
@@ -439,7 +467,29 @@
 
 			// new OO dot operator, only $object.member, not  $o[$i].mem
 				$php = preg_replace( '/(\$[\w._]+)\.(\w)/', '$1->$2', $php );			
-							
+
+			//enum {}
+				if ( preg_match_all( '/[\n\r]\s*(enum\s*\{)/', $php, $M, PREG_OFFSET_CAPTURE ) ) {
+					$d = 0;
+					$n = 0;
+					echo '<pre>';
+					foreach( $M[1] as $m ) {
+						$p = $m[1] + $d;
+						$o = strpos( $php, '{', $p );
+						$q = strpos( $php, '}', $o );
+						$e = '';
+						$E = substring( $php, $o+1, $q-1 );
+						foreach( splitt( ',', $E ) as $v ) {
+							$e .= "define('$v',$n);";
+							$n++;
+						}
+						$e .= str_repeat( "\n", substr_count( $E, "\n" ) );										
+						$php = substring_replace( $php, $e, $p, $q );
+						$d += strlen($e) - ($q - $p + 1);
+					}
+				}				
+
+
 			$src = substr_replace( $src, $php, $i, $j - $i + 1 );
 		} //while
 		
@@ -483,8 +533,9 @@ foreach ( $prePHP->script as $_filename_ => $_script_ ) {
 	try { 
 		eval( '?>' . $_script_ ); 		
 	} catch ( throwable $ex ) { 
-		echo $ex; 
+		echo '<pre>'; print_r((array)$ex); 
 		echo '<pre>';
+		print_r( error_get_last() );
 		print_r( split( "\n", $prePHP->script[ $_filename_ ] ) ); 
 		die;
 	}
