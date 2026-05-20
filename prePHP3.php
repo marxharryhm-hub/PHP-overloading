@@ -1,5 +1,9 @@
 <?php
-	$prePHP = obj( version: '3.3', update: 'built: 27 April 2026 - implements OOX' );
+	$prePHP = obj( version: '3.4', update: 'built: 20 May 2026 - implements OOX' );
+
+	$prePHP->notes = " This preload implements keywords: override, oveload and extend. It also implements 
+	a number of general purpose functions.
+	";
 	
 	$prePHP->FUNCTIONS = [];	
 
@@ -111,8 +115,12 @@
 		for( $i = 0; $i < $n; $i++ ) $r[$i] ??= null;
 		return $r;
 	 }	 
-	function splitt( $d, $s, $n=0, $default=null ) { //trimmed and no empty elements		
-		$r = $n ? explode( $d, $s, $n ) : explode( $d, $s );
+	function splitt( $d, $s, $n=0, $default=null ) { //trimmed and no empty elements	
+		if ($d[0] === '/' && $d[-1] === '/' && strlen($d) > 2 ) {
+			echo $d;
+			$r = $n ? preg_split( $d, $s, $n ) : preg_split( $d, $s );			
+		}
+		else $r = $n ? explode( $d, $s, $n ) : explode( $d, $s );
 		$r = array_filter( array_map( 'trim', $r ) );
 		for( $i = 0; $i < $n; $i++ ) $r[$i] ??= $default;		
 		return $r;
@@ -412,15 +420,16 @@
 				// here the left bracket must be preceded with a space
 				$php = preg_replace( '/\W(\([^()]*\)\s*)==>/', ' fn$1=>', $php );
 
-			//for $i=1..10 { :
+			//for $i=1..10 { : _ii_ is reserved
 				$php = preg_replace_callback( '/\bfor\s+\$([^=]+)=([^.]+)\.\.([^{]+)/', 
 					function ($m) {
 						$i = trim($m[1]);
 						$i0 = trim($m[2]);
 						$i9 = trim($m[3]);
-						return '$'.$i.$i.' = '.$i9.'; for( $'.$i.'='.$i0.'; $'.$i.' <= $'.$i.$i.'; $'.$i.'++ )' ;
+						return '$_'.$i.$i.'_ = '.$i9.'; for( $'.$i.'='.$i0.'; $'.$i.' <= $_'.$i.$i.'_; $'.$i.'++ )' ;
 					},
 					$php );
+			
 
 			//OOX: overload/override/extend function str():
 				if ( preg_match_all( '/[\n\r]\s*(overload|override|extend)\s+(function)\s+(\w+)/', 
@@ -448,7 +457,7 @@
 		
 			// new inline object syntax: {x:'ex'}			
 				$p = 0;
-				while ( ( $p = strpos( $php, '{' , $p+1 ) ) !== false ) { // [=(,] { name:'harry' }
+				while ( ( $p = strpos( $php, '{' , $p+1 ) ) !== false ) { // ,:=( { name:'harry' }
 					//must be '{name:'
 					if ( $php[ $p+1 ] !== '$' ) { // not {$...}
 						for ( $q = $p + 1;  $php[$q] <= 32; $q++);
@@ -471,7 +480,7 @@
 			//enum {}
 				if ( preg_match_all( '/[\n\r]\s*(enum\s*\{)/', $php, $M, PREG_OFFSET_CAPTURE ) ) {
 					$d = 0;
-					$n = 0;
+					$n = 1;
 					echo '<pre>';
 					foreach( $M[1] as $m ) {
 						$p = $m[1] + $d;
@@ -481,7 +490,7 @@
 						$E = substring( $php, $o+1, $q-1 );
 						foreach( splitt( ',', $E ) as $v ) {
 							$e .= "define('$v',$n);";
-							$n++;
+							$n <<= 1;
 						}
 						$e .= str_repeat( "\n", substr_count( $E, "\n" ) );										
 						$php = substring_replace( $php, $e, $p, $q );
@@ -489,6 +498,19 @@
 					}
 				}				
 
+			//publish $X;  ...make it global everywhere
+				// $X ===> $GLOBALS['X']
+				if ( preg_match( '/[\n\r]\s*publish\s/', $php, $M, PREG_OFFSET_CAPTURE ) ) {
+					$p = strpos( $php, 'p', $M[0][1] );
+				//}
+				//if ( ( $p = strpos( $php, 'publish' ) ) !== false ) {
+					$q = strpos( $php, ';', $p );
+					$php[$p] = '#';
+					foreach( splitt(',', substr( $php, $p + 7, $q - $p - 7 ) ) as $pv ) {
+						$x = '/\\'.$pv.'\b/';
+						$php = preg_replace( $x, '$GLOBALS[\'' . substr($pv,1). '\']', $php );
+					}
+				}
 
 			$src = substr_replace( $src, $php, $i, $j - $i + 1 );
 		} //while
@@ -529,16 +551,17 @@ deref();
 //echo '<pre>'; print_r( $prePHP->script ); die;
 //print_r( split( "\n", $prePHP->script[ $prePHP->script_name ] ) ); die;
 
-foreach ( $prePHP->script as $_filename_ => $_script_ ) {
-	try { 
-		eval( '?>' . $_script_ ); 		
-	} catch ( throwable $ex ) { 
-		echo '<pre>'; print_r((array)$ex); 
-		echo '<pre>';
-		print_r( error_get_last() );
-		print_r( split( "\n", $prePHP->script[ $_filename_ ] ) ); 
-		die;
+	foreach ( $prePHP->script as $_filename_ => $_script_ ) {
+		try { 
+			eval( '?>' . $_script_ ); 		
+		} catch ( throwable $ex ) { 
+			echo '<pre>'; print_r((array)$ex); 
+			echo '<pre>';
+			print_r( error_get_last() );
+			print_r( split( "\n", $prePHP->script[ $_filename_ ] ) ); 
+			die;
+		}
 	}
-}
+
 die;
 ?>
