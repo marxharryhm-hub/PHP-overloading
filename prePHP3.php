@@ -1,5 +1,5 @@
 <?php
-	$prePHP = obj( version: '3.4', update: 'built: 20 May 2026 - implements OOX' );
+	$prePHP = obj( version: '3.41', update: 'built: 20 May 2026 - implements OOX' );
 
 	$prePHP->notes = " This preload implements keywords: override, oveload and extend. It also implements 
 	a number of general purpose functions.
@@ -501,14 +501,22 @@
 			//publish $X;  ...make it global everywhere
 				// $X ===> $GLOBALS['X']
 				if ( preg_match( '/[\n\r]\s*publish\s/', $php, $M, PREG_OFFSET_CAPTURE ) ) {
-					$p = strpos( $php, 'p', $M[0][1] );
-				//}
-				//if ( ( $p = strpos( $php, 'publish' ) ) !== false ) {
+					$p = strpos( $php, 'p', $M[0][1] );				
 					$q = strpos( $php, ';', $p );
 					$php[$p] = '#';
 					foreach( splitt(',', substr( $php, $p + 7, $q - $p - 7 ) ) as $pv ) {
 						$x = '/\\'.$pv.'\b/';
 						$php = preg_replace( $x, '$GLOBALS[\'' . substr($pv,1). '\']', $php );
+					}
+				}
+				if ( preg_match_all( '/[\n\r]\s*published\s/', $php, $M, PREG_OFFSET_CAPTURE ) ) {
+					foreach ( array_reverse( $M[0] ) as $m ) {
+						$p = strpos( $php, 'p', $m[1] );				
+						for ($k = 0; $k < 10; $k++) { $php[$p+$k] = ' '; }
+						$q = strpos( $php, '=', $p );						
+						$pv = trim( substr( $php, $p+10, $q - $p - 10 ) ); 						
+						$x = '/\\'.$pv.'\b/';
+						$php = preg_replace( $x, '$GLOBALS[\'' . substr($pv,1). '\']', $php );						
 					}
 				}
 
