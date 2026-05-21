@@ -1,5 +1,5 @@
 <?php
-	$prePHP = obj( version: '3.41', update: 'built: 20 May 2026 - implements OOX' );
+	$prePHP = obj( version: '3.5', update: 'built: 21 May 2026 - implements OOX' );
 
 	$prePHP->notes = " This preload implements keywords: override, oveload and extend. It also implements 
 	a number of general purpose functions.
@@ -339,7 +339,32 @@
 		}
 		return $template;
 	 } 
-				
+	
+	function scan( ...$P ) {  //scan( in:'hay', from: 0, 'x', 'y', ['a','b'] )
+		$from = $P['from'] ?? 0; unset( $P['from'] );
+		if ( isset( $P['in'] ) ) { $hay = $P['in']; unset( $P['in'] ); }	
+		else { $hay = $P[0]; unset( $P[0] ); }	
+		if ( isset( $P['for'] ) ) { $P = $P['for']; if ( gettype( $P ) !== 'array' )  $P = [$P]; }
+		$r = [];
+		foreach ( $P as $p ) {
+			if ( gettype( $p ) == 'array' ) {
+				if ( $rr = scan( in: $hay, from: $from, for:$p ) ) $r[] = $rr;
+			}
+			else {				
+				$i = $from - 1;
+				while ( ( $i = strpos( $hay, $p, $i+1 ) ) !== false ) $r[] = $i; 
+			}
+		}
+		sort($r);
+		return $r;
+	 }
+		//disp( scan( 'abc', 'x' ), scan( 'abc', 'x' ) ? true : false );
+		//disp( scan( 'abc', 'a' ), scan( 'abc', 'a' ) ? true : false );
+		//disp( scan( 'abc', 'c', 'a' ), scan( 'abc', 'c', 'a' ) ? true : false );
+		//disp( scan( 'xxxabc', 'b', 'a' ), scan( 'xxxabc', 'b', 'a' ) ? true : false );
+		//disp( scan( 'xxxabc', ['a', 'b'] ), scan( 'xxxabc', ['a', 'b'] ) ? true : false );
+		//foreach ( scan( for:'x', in:'xxxabc', from:1 )  as $i ) disp('i:', $i );	
+		
 	function __call( $fn, ...$X ) {
 			global $prePHP;
 			if ( $fn === 'valtype' || str_starts_with( $fn, '-valtype' ) ) $sigx = '';	//can only be extended, never overloaded
@@ -396,10 +421,57 @@
 					}	
 				}
 
+			
+
+			// ==>
+			$d = 0;
+			$D = [];
+			foreach ( scan($php, '==>') as $q ) {				
+				$q += $d;				
+				for( $p = $q-1; $php[$p] <= ' '; $p-- );	
+
+				if ( $php[$p] !== ')' ) { 
+					//declaration/no parameters ........
+					for( $k = $p; $php[$k] > ' '; $k-- );
+					$D[] = substring($php, $k+1, $p );
+					$php[$p] = $php[$p] | "\xF0";					
+					$php = substr_replace( $php, '()', $p+1, 0 );
+					$p+=2;	$q+=2;	$d+=2;
+					goto func;
+				}
+				
+				if ( $php[$p] == ')' ) { 
+					for( $p = $q-1; $php[$p] != '('; $p-- );
+					if ( preg_match( '/\W/', $php[$p-1] ) ) { //lambda:	_($x)==>  :  fn($x)=>
+						$php = substring_replace( $php, 'fn'.substring( $php, $p, $q-1), $p, $q);
+						$d++;
+					} else { func:
+						for( ; $php[$p] > ' '; $p-- );
+						for( $k = $q+3; $php[$k] <= ' '; $k++ );
+						if ( $php[$k] == '{' ) { //long function:	func($x) ==> {
+							$s = 'Function '. substring( $php, $p+1, $q-1 );						
+							$php = substring_replace( $php, $s, $p+1, $k-1 );
+							$d += strlen($s) - ($k-$p-1);
+						} else { //long function:	inc($x) ==> $x+1
+							for( $m = $k; $php[$m] != ';'; $m++ );
+
+							$s = 'function '. substring( $php, $p+1, $q-1 ) . '{ return ' . 
+								substring( $php, $k, $m ) . '}';
+							$php = substring_replace( $php, $s, $p+1, $m );
+							$d += strlen($s) - ($m-$p);							
+						}
+					}
+				}								
+			}
+			foreach( $D as $d ) {
+				$php = preg_replace( '/\b'.$d.'\b/', $d.'()', $php );
+			}
+
 			//short function syntax: f()==>
 				//	add( $a, $b ) ==> $a + $b; 
-				//  add( $a, $b ) ==> { return $a + $b; } 				
+				//  add( $a, $b ) ==> { return $a + $b; } 					  
 				//  the left bracket for the parameters must touch the function name
+/*
 				$q = -1;
 				while ( ( $q = strpos( $php, '==>', $q+1 ) ) !== false ) {
 					$p = strposrev( $php, '(', $q );
@@ -415,10 +487,14 @@
 						$php = substr_replace( $php, 'function ', $p+1, 0 );
 					}
 				}	
-			
-			//lambda functions:	()==>    
-				// here the left bracket must be preceded with a space
-				$php = preg_replace( '/\W(\([^()]*\)\s*)==>/', ' fn$1=>', $php );
+*/
+
+			//lambda functions:	()==> 
+				//   ($a,$b) ==> $a <=> $b
+				// here the left bracket must be preceded with a non-word
+//				$php = preg_replace( '/\W(\([^()]*\)\s*)==>/', ' fn$1=>', $php );
+
+
 
 			//for $i=1..10 { : _ii_ is reserved
 				$php = preg_replace_callback( '/\bfor\s+\$([^=]+)=([^.]+)\.\.([^{]+)/', 
