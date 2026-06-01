@@ -1,14 +1,55 @@
 <pre>
-<?php
+<?php		
 
-	//just an example of a simplified for-loop syntax	
+	objdecl ==> { name:'harry' };
+
+	$x = 'a';
+	case( $x ) {
+		'a': $x = 1;
+		'b': $x = 2;
+		else: $x = 3;
+	}
+	case( $x ) {
+		'a': $x = 1;
+		'b':		
+		'c': $x = 2;
+	}
+	case( $x ) {
+		'a','b','c':$x=1;
+		'c': $x = 2;
+	}
+
+	dx1 ==> 'hallo1';
+	disp( dx1 );
+	dx2 ==> { return 'hallo2'; }
+	disp( dx2 );
+	dxxx ==> {
+		$dx3 ==> 'hallo3'; 	
+		disp( $dx3() );
+		$dx4($name) ==> 'hallo ' . $name; 	
+		disp( $dx4( 'harry' ) );
+		$dx5($name) ==> { return 'hallo ' . $name; };	
+		disp( $dx5( 'harry' ) );
+	}
+	dxxx;
+
+	//making variables global without using 'global'
+	publish $X; //or: published $X = 'gX';
+	$X = 'gX';	
+	function x() { return $X . ' is accessible byref everywhere'; }
+	echo x().'<br>';	
+
+	//declarations - functions in disguise
+	echo 'declarations look like expressions, but is functions: ' . Z .'<br>';
+	Z ==> 'ZZZ'."'s";
+
+	//just an example of a simplified for-loop syntax
 		for $i = 1..10 {echo $i;} 
 		echo '<br>';
- 	//you cannot use $i in terminal value like for $i = 1..$i+1 - it will go into infinite loop.
-	
-	disp( { one:1, two:2 } ); //is obj if precede with (,=
 
-		//simplified function definitions: 'is given by'
+		disp( { one:1, two:2 } ); //is obj if precede with (,=
+
+	//simplified function definitions: 'is given by'
 	//also works for lamdas:  array_map( ($x) ==> ...
 		add($a, $b) ==> $a + $b;  // fat-arrow functions 
 		add2($a, $b) ==> { return $a + $b; } // fat-arrow function with {body}
@@ -136,6 +177,7 @@
 
 	disp( splitt( ',', overload_type_expression( 'a|b_1|2' ) ) );
 
+
 	//There are alternative mechanisms in native PHP, which allows polymorhism inside a function.
 	//The first uses getType() on an untyped parameter, which will return the type of the value passed  
 	//( which is the basis for valtype() ).
@@ -162,6 +204,7 @@
 	//It also does not isolate previously written code like an overload approach does.
 //--------
 
+
 	//You can change the type of a struct by simply calling struct() again, or by setting _type.	
 	$s = struct( { name: 'harry' } ); //untyped - disp() as stdClass
 	disp($s);
@@ -170,4 +213,6 @@
 	disp( $s );
 	overload str( boss $s ) ==> 'His Great ' . strtoupper($s.name);
 	overload str( staff $s ) ==> 'Hardworking Staff ' . strtoupper($s.name);
+
+
 ?>
