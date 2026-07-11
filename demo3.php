@@ -65,7 +65,7 @@
 		echo xstr( 1 ) . '<br>';
 		//If you uncomment the next instruction, it nullify the above extensions,
 		//and the output of the above echo changes accordingly
-			override xstr( $x ) ==> xstr_($x);
+			override xstr( $x ) ==> 'o ' . xstr_($x);
 		//You cannot use the fn_() form to access an extended version in an overridden version.
 		//You cannot use a particular version, override it, and then use the overridden version.
 		//Overriding or extending a function does so globally !!!
@@ -96,8 +96,8 @@
 	//extend valtype() to return some custom type based on some arbitrary condition
 	//valtype() can only be extended, never overloaded!!!
 	//this is because valtype is used to resolve overloads, which will loop...
-	extend valtype( $v ) ==> $v === 1 ? 'number' : valtype_($v);
-	// returns "number integer string"
+	extend valtype( $v ) ==> $v === 1 ? 'number1' : valtype_($v);
+	// returns "number1 integer string"
 	display( valtype(1), valtype(2), valtype( 'xxx' ) ); 
 	//define an overload formatter now for exactly this new custom type
 	overload val( number $i ) ==> '#' . $i;			
@@ -150,18 +150,18 @@
 //extending an existing overload, will override ALL overloads......... :-(
 //I would like this not to ... but don't have an elegant solution yet..............
 
-	//Degeneracy approaches inheritance. If a the arguments' signature does not match, 
+	//Degeneracy approaches inheritance. If the arguments' signature does not match, 
 	//overloading tries a generative signature - take note of the type expressions and 
 	//operators (in priority sequence). 
-	overload area(    shape $s) ==> 'abstract';
-	overload area(   circle $s) ==> 'circle area is:' . pi() * $s.radius ** 2;
-	overload area(rectangle $s) ==> 'rectangle area is:' . $s.width * $s.height;
-	overload area(   square $s) ==> 'square area is:'. $s.length ** 2;
+	overload area(     shape $s ) ==> 'abstract';
+	overload area(    circle $s ) ==> 'circle area is:' . pi() * $s.radius ** 2;
+	overload area( rectangle $s ) ==> 'rectangle area is:' . $s.width * $s.height;
+	overload area(    square $s ) ==> 'square area is:'. $s.length ** 2;
 
 	disp( 'circle:',	area( struct( circle:	{ radius:10 } ) ) );
 	disp( 'rectangle:', area( struct( rectangle:{ width:10, height:10 } ) ) );
 	disp( 'square:',	area( struct( square:	{ length:10 } ) ) );	
-	//the following call will use a 'shape_square' overload, else degenrate to a 'shape' overload
+	//the following call will use a 'shape_square' overload, else degenerate to a 'shape' overload
 	disp( 'shape_square:', area( struct( shape_square: { length:10 } ) ) );	
 	//the following call will use square or shape, to find an overload
 	disp( 'square|shape:', area( { _type:'square|shape', length:10 } ) ); //here the _type syntax must be used
@@ -214,5 +214,47 @@
 	overload str( boss $s ) ==> 'His Great ' . strtoupper($s.name);
 	overload str( staff $s ) ==> 'Hardworking Staff ' . strtoupper($s.name);
 
+
+//--------
+disp('<hr>Use declaratives as destination in assignment statements:<br>');
+
+published $_instance = rand() . rand() . rand();
+disp('This declaration is written to accept 1 or 2 arguments.');
+disp('When presented 1, it acts like a getter();');
+disp('When presented 2, it acts like a setter();');
+disp('Moina allows an alternative setter syntax: called with 1, yet assigned a value:');
+
+instance( $k = null, $v = null ) ==> {	
+	if ( $k !== null && $v !== null ) {	
+		if ( str_ends_with( $k, '{}' ) ) foreach ( $v as $kk => $vv ) {
+			$_SESSION[ $_instance ][ substr($k,0,-2) ] ??= obj();
+			$_SESSION[ $_instance ][ substr($k,0,-2) ]->$kk = $vv;
+		}
+		elseif ( str_ends_with( $k, '[]' ) ) foreach ( $v as $kk => $vv )
+			$_SESSION[ $_instance ][ substr($k,0,-2) ][$kk] = $vv;
+		else
+			$_SESSION[ $_instance ][ $k ] = $v;
+	}
+	if ( $k === null ) return $_SESSION[ $_instance ];
+	return $_SESSION[ $_instance ][$k] ?? null;
+}
+
+instance('name') = 'harry';
+disp( "1. ", instance( 'name' ) );
+
+instance('arr_test') = ['i1' => 'v1' ];
+disp( "2. ", instance() );
+
+instance('arr_test[]') = ['i2' => 'v2', 'i3' => 'v3' ];
+disp( "3. ", instance(), instance('arr_test')['i2'] );
+
+instance('obj_test{}') = { p1: 'v1' };
+disp( "4. ", instance() );
+
+instance('obj_test{}') = {p2: 'v2'};
+disp( "5. ", instance(), instance('obj_test')->p2 );
+
+instance('obj_test') = {p3: 'v3'};
+disp( "5. ", instance(), instance('obj_test')->p3 );
 
 ?>
