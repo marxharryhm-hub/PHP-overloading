@@ -1,6 +1,6 @@
-Latest version: prePHP3
+Latest version: moina3
 This pre-processor is to be linked in php.ini:
-auto_prepend_file = "C:\inetpub\wwwroot\prePHP3.php"
+auto_prepend_file = "C:\inetpub\wwwroot\moina3.php"
 
 Using this code - you do so with no guarentees, no support. It has no copyright, and no licensing required.
 But you use it at your own risk!!!
