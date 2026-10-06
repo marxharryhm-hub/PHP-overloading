@@ -19,3 +19,8 @@ You can also do override and extend - see documentation in the preprocessor.
 
 A more user friendly description is on medium:
 https://medium.com/@marxharry.hm/extending-php-ea428fd58bb2
+Also see:
+https://medium.com/@marxharry.hm/php-is-not-perfect-bc4a00632a00
+https://medium.com/@marxharry.hm/moina-v3-for-php-2a181cdd69eb
+
+-----------------------------------------
