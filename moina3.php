@@ -1,11 +1,21 @@
 <?php
-	$prePHP = obj( alias: 'Moina', version: '3.10', update: 'built: 7/7/2026 - implements OOX' );
+	$prePHP = obj( alias: 'Moina', version: '3.12', update: 'built: 2026-10-06 - implements OOX' );
 	// Harry Marx 2026
 
-	/*		
+	/*	
+	3.12
+		- added array_filter_keys() and arr()
+		- [a:1, b:1] syntax for arrays
+	3.11
+		- dropped requirement for case expression to be inside (): case xxx {
+		- added support for 2nd param group on more versions of declarations
+		- added return types for declarations:  type: xxx() ==>
 	3.10
 		- changed enums to global replacements, as define did not scope into declerations
 		- use declaratives in assignment statements
+		- added support for $f = function f() use ( ... ); using double paramter defs: ()()
+		- push() & pop()
+		- minor bug fixes
 	3.9
 		bug fix for CASE statement.
 	3.8		
@@ -21,14 +31,17 @@
 	*/
 
 	$prePHP->notes = "This preload implements keywords: override, oveload and extend. It also implements 
-	a number of general purpose functions.";
+	a number of general purpose functions, and syntax enhancement.";
 	
 	$prePHP->FUNCTIONS = [];	
 
 	//these are functions not affected by OOX, and do not use OOX
 	function obj( ...$p ){ return (object)$p; }
-	function struct( ...$T ) { 
-		$t = array_key_first($T); $T[$t]->_type = $t ?: null; return $T[$t]; 
+	function arr( ...$p ){ return $p; }
+	function struct( ...$T ) { 	
+		$t = array_key_first($T); 
+		$T[$t]->_type = $t ?: null; 
+		return $T[$t]; 
 	 }	
 	function substring( $s, $from, $to=-1 ) {
 		if ( is_string( $from ) ) { 
@@ -122,34 +135,48 @@
 
 			return substr_replace( $s, $ss, $i, $j - $i + 1);
 		 };
-	function array_map_keys( $fn, $A ) {
+	function array_map_keys( callable $fn, $array ) {
 		$R = [];
-		foreach( $A as $k => $v ) $R[] = $fn( $k, $v );
+		foreach( $array as $k => $v ) $R[] = $fn( $k, $v );
 		return $R;
 	 }
-	function split( $d, $s, $n=0 ) { 
-		$r = $n ? explode( $d, $s ?? '', $n ) : explode( $d, $s ?? '' );		
-		for( $i = 0; $i < $n; $i++ ) $r[$i] ??= null;
+	function array_filter_keys( $array, callable $fn) {
+		foreach( $array as $k => $v ) if ( !$fn($k, $v) ) unset( $array[$k] );
+		return $array;
+	 }
+	function split( $d, $s, $n = 0, $default=null ) { 
+		if ($d[0] === '/' && $d[-1] === '/' && strlen($d) > 2 ) 			
+			$r = $n ? preg_split( $d, $s, $n ) : preg_split( $d, $s );					
+		else $r = $n ? explode( $d, $s ?? '', $n ) : explode( $d, $s ?? '' );		
+		for( $i = 0; $i < $n; $i++ ) $r[$i] ??= $default;
 		return $r;
 	 }	 
 	function splitt( $d, $s, $n=0, $default=null ) { //trimmed and no empty elements	
-		if ($d[0] === '/' && $d[-1] === '/' && strlen($d) > 2 ) {
-			echo $d;
-			$r = $n ? preg_split( $d, $s, $n ) : preg_split( $d, $s );			
-		}
+		if ($d[0] === '/' && $d[-1] === '/' && strlen($d) > 2 ) 			
+			$r = $n ? preg_split( $d, $s, $n ) : preg_split( $d, $s );					
 		else $r = $n ? explode( $d, $s, $n ) : explode( $d, $s );
-		$r = array_filter( array_map( 'trim', $r ) );
+		$r = array_filter( array_map( 'trim', $r ), fn($a) => $a !== '' );
 		for( $i = 0; $i < $n; $i++ ) $r[$i] ??= $default;		
 		return $r;
 	 }
-	function hide( $s ) {
-		$j = strlen( $s );		
-		for ( $i = 0; $i < $j; $i++ ) $s[$i] = $s[$i] | "\x80";	
+	function splitp( $d, $s, $n=0, $default=null ) { //trimmed and no empty elements	
+		if ($d[0] === '/' && $d[-1] === '/' && strlen($d) > 2 ) 			
+			$r = $n ? preg_split( $d, $s, $n ) : preg_split( $d, $s );					
+		else $r = $n ? explode( $d, $s, $n ) : explode( $d, $s );
+		$r = array_map( 'trim', $r );
+		for( $i = 0; $i < $n; $i++ ) $r[$i] ??= $default;		
+		return $r;
+	 }
+	function hide( $s, $i=0, $j=-1 ) {
+		if ( $i < 0 ) $i += strlen($s);
+		if ( $j < 0 ) $j += strlen($s);			
+		for ( ; $i <= $j; $i++ ) $s[$i] = $s[$i] | "\x80";	
 		return $s;
 	 }
-	function unhide( $s ) {
-		$j = strlen( $s );		
-		for ( $i = 0; $i < $j; $i++ ) $s[$i] = $s[$i] & "\x7F";
+	function unhide( $s, $i=0, $j=-1 ) {
+		if ( $i < 0 ) $i += strlen($s);
+		if ( $j < 0 ) $j += strlen($s);		
+		for ( ; $i <= $j; $i++ ) $s[$i] = $s[$i] & "\x7F";
 		return $s;
 	 }
 	function valtype( $v ) { 	
@@ -186,43 +213,50 @@
 			else $t .= $k . ':\'' . $v .'\',';
 		return $T . ':{' . $t . '}';
 	 }
-	function str( $x ) { 
+	function str( $x ) { // overload
 		if ($x === null) return 'null';
 		if ($x === true) return 'true';
 		if ($x === false) return 'false';
 		return print_r( $x, true ); 
 	 }
+	
 	function hideNCS( $s ) {
 		$L = strlen( $s ); 
-		$q = null;
-		$i = $c = $C = 0;
-		for( $j = 0; $j < $L ; $j++ ) {			
+		$i = $q = null;
+		$c = $C = 0;
+		for( $j = 0; $j < $L; $j++ ) {			
 			switch( $s[ $j ] ) {	
-				case "\\": $j++; break; //escape - ignore next char
-				case "'": case '"': case '`': if ( $C || $c ) break;					
+				case "\\": $j++; $s[$j] = $s[$j] | "\x80"; break; //escape - ignore next char
+				case "'": case '"': case '`': if ( $C || $c ) break;
 					if ( $q == $s[ $j ] ) { 						
 						$len = $j - $i;
 						$s = substr_replace( $s, str_repeat( "\x80", $len ) | substr($s, $i, $len), $i, $len );
-						$q = null; 
+						$i = $q = null; 
 					} 
 					elseif ( ! $q ) { $q = $s[$j]; $i = $j + 1; }					
-					break;					
-				case '/': if ( $q ) break;
-					if ( $s[$j+1] === '*' ) { $C++; if ($C === 1) $i = $j; }
-					elseif ($C) {
-						if ( $s[$j-1] === '*' ) $C--; 
-						if ($C === 0) for (; $i <= $j; $i++ ) $s[$i] = $s[$i] > ' ' ? ' ' : $s[$i];		
-					}
-					elseif ( $s[$j+1] === '/' && !$c ) { $c++; $i = $j; }					
 					break;
-				case '#': if ( !$q && !$C && !$c ) { $c++; $i = $j; } break;
+				case '/': if ( $q || $c ) break;
+					if ( isset( $s[ $j+1 ] ) && $s[ $j+1 ] === '*' ) { $C++; $i ??= $j; }
+					elseif ( $C ) {
+						if ( $j && $s[ $j-1 ] === '*' ) $C--; 
+						if ( $C === 0 ) {
+							for (; $i <= $j; $i++ ) if ( $s[$i] > ' ' ) $s[$i] = ' ';		
+							$i = null;
+						}
+					}
+					elseif ( isset( $s[ $j+1 ] ) && $s[ $j+1 ] === '/' && !$C ) { $c++; $i ??= $j; }					
+					break;
+				case '#': if ( !$q && !$C && !$c ) { $c++; $i ??= $j; } 
+					break;
 				case "\n": case "\r": if ( $c ) {
 						for(; $i < $j; $i++ ) if ($s[$i] > ' ') $s[$i] = ' ';
 						$c = 0; 
+						$i = null;
 					}
 					break;
 			}
 		}	
+
 		return $s;
 	 };	
 	function split_param_types( $ps ) {
@@ -253,6 +287,11 @@
 		}
 		echo '<br>';
 	 }
+	function dispp( ...$p ) {
+		array_push( $p, '</pre>' );
+		disp( '<pre>', ...$p, );
+	 }
+
 	function formstr( $template, $params, $trunc = true ) {
 		/*	
 			{name} {name%9} {name%9.9} {name%x9.9} where x can be: n/d/s/f
@@ -340,8 +379,8 @@
 					else while ( strlen($v) < $W ) $v .= ' ';
 				}
 				elseif ( $w[0] === 'f' ) { //%f.2f
-					$w = substr( $w, 1 ); 
-					$v = sprintf( $w, $params[$k] );
+					$w = '%' . substr( $w, 1 ); 
+					$v = sprintf( $w, $v );
 				}
 				else { // %10 // %10.1	
 					$W = abs( $w );
@@ -357,6 +396,27 @@
 		return $template;
 	 } 
 	
+	function push( array &$A, $v ) {
+		array_unshift( $A, $v );
+		return $A;
+	 }
+	function pop( array &$A ) {
+		return array_shift( $A );
+	 }
+	function aa_pop( array &$A, $i, $default=null ) {
+		if ( ! isset( $A[$i] ) ) return $default;
+		$x = $A[$i];
+		unset( $A[$i] );
+		return $x;
+	 }
+	
+	function any_of( $a, ...$O ) {
+		return in_array( $a, $O );
+	 }
+	function none_of( $a, ...$O ) {
+		return in_array( $a, $O );
+	 }
+
 	function scan( ...$P ) {  //scan( in:'hay', from: 0, 'x', 'y', ['a','b'] )
 		$from = $P['from'] ?? 0; unset( $P['from'] );
 		if ( isset( $P['in'] ) ) { $hay = $P['in']; unset( $P['in'] ); }	
@@ -409,14 +469,13 @@
 				join( '_', array_map( fn($x) => valtype($x), $X ) )	.')' );		
 		 }
 
-	function prePHP( $file=null, $src=null ) { global $prePHP;
+	function prePHP( $file = null, $src = null ) { global $prePHP;
 		if ( $file ) {
 			if ( isset( $prePHP->script[ $file ] ) ) return;
-			$src = file_get_contents( $file );		
+			$src ??= file_get_contents( $file );		
 		}
-		
-		$i = -1; //for each php block in the file
-		
+
+		$i = -1; //for each php block in the file		
 		while ( ( $i = strpos( $src, '<?php', $i+1 ) ) !== false ) {
 			$i += 5;
 			$j = strpos( $src, '?>', $i ) ?: strlen( $src ) + 1;
@@ -424,7 +483,7 @@
 			$php = substr( $src, $i, $j - $i + 1 );
 
 			$php = hideNCS( $php );			
-								
+						
 			//for each library required:
 				foreach( ['require','require_once'] as $r )
 				if ( preg_match_all( '/[\n\r]\s*'.$r.'\b/', $php, $M, PREG_OFFSET_CAPTURE + PREG_SET_ORDER ) ) {	
@@ -442,22 +501,21 @@
 			// new inline object syntax: return {x:'ex'}			
 				$p = 0;
 				while ( ( $p = strpos( $php, '{' , $p+1 ) ) !== false ) { // >(=,: { name:'harry' }
-					//must be '{name:'
+					//must be '{name:'					
 					if ( $php[ $p+1 ] !== '$' ) { // not {$...}
 						for ( $q = $p + 1;  $php[$q] <= ' '; $q++);
 						while ($php[$q] > ' ' && $php[$q] != ':' && $php[$q] != '}') $q++;
 						
-						if ( $php[$q] == ':' || $php[$q] == '}' && $q == $p + 1) {
+						if ( $php[$q] == ':' || $php[$q] == '}' && $q == $p + 1 ) {
 							for ( $k = $p - 1;  $k > 0 && $php[$k] <= ' '; $k--);
 							switch ( $php[$k] ) {
 							case 'n':
 								for ( $m = $k - 1;  $m > 0 && $php[$m] > ' '; $m--);
 								if ( substring( $php, $m+1, $k ) != 'return' ) break;								
-							case ':': case '=': case '(': case ',': case '>': case '?': case '[':
-								if ( $q == $p + 1 ) {									
-									$php = substr_replace( $php, '(object)[]', $p, 2 );
-									//disp( 'empty object!:', substr( $php, $p-40, 80 ) );
-									//die;
+							case ':': case '=': case '(': case ',': case '>': case '?': case '[':								
+								if ( $q == $p + 1 ) {	//  {};  {},  empty object								
+									if ( any_of( $php[$q+1], ';',',' ) )
+										$php = substr_replace( $php, '(object)[]', $p, 2 );									
 								} else {
 									$q = str_paired( $php, $p );							
 									$php[$q] = ')';
@@ -471,10 +529,12 @@
 			// ==> declarations / functions				
 				$prePHP->decls ??= [];
 				$prePHP->declf ??= [];
-				foreach ( array_reverse( scan($php, '==>') ) as $q ) {													
-					for( $p = $q-1; $php[$p] <= ' '; $p-- ); //get end of decl name					
+				$glob = '';
+				foreach ( array_reverse( scan($php, '==>') ) as $q ) { //$q is on ==>
 
-					if ( $php[$p] !== ')' ) { // naked: decl with no parameters
+					for( $p = $q-1; $php[$p] <= ' '; $p-- ); //p: get end of decl signature
+
+					if ( $php[$p] != ')' ) { // naked: decl with no parameters
 
 						if ( preg_match( '/\W/', $php[$p] ) ) { //anonymous naked decl
 							$php = substr_replace( $php, '()', $q, 0 ); //add an empty param def
@@ -501,17 +561,37 @@
 					}
 					
 					if ( $php[$p] == ')' ) { //decl with params
-						for( $p = $q-1; $php[$p] != '('; $p-- ); //get param start
-						if ( preg_match( '/\W/', $php[$p-1] ) ) { //not preceded with function name?
+						
+						for(; $php[$p] != '('; $p-- ); //p: get start of last p-grp 
+
+						if ( $php[$p-1] == ')' ) { // ()() ==>
+							for( $pp = $p-1; $php[$pp] != '('; $pp-- ); //pp: get start of 1st p-grp
+							if ( ! ctype_alnum( $php[$pp-1] ) ) { //it is an anonymous/callback function
+								$s = ' use'.str_replace( '$', '&$', substring( $php, $p, $q ) );
+								$php = substring_replace( $php, $s, $p, $q );
+								$q += strlen( $s ) - ( $q - $p + 1);
+								$p = $pp; 
+							} else { // it is a named function
+								for( $g = $q-1; $php[$g] != ')'; $g-- ); //g: get end of decl signature
+								$glob = substring( $php, $p+1, $g-1);					
+								$php = substring_replace( $php, ' ', $p, $q-1 );
+								for( $q = $p; $php[$q] != '='; $q++);
+								$p = $pp;
+							}
+						}
+
+						if ( ! ctype_alnum( $php[$p-1] ) ) { //it is an anonymous/callback function
+						//if ( preg_match( '/\W/', $php[$p-1] ) ) { //not preceded with function name?
 							for( $k = $q+3; $php[$k] <= ' '; $k++ ); //get start of decl body
 							if ( $php[$k] == '{' ) {	//if body is long decl
 								$s = 'function'.substring( $php, $p, $q-1); // make it long function
 								$php = substring_replace( $php, $s, $p, $k-1);								
 							} else { //body is short, make it lambda
+								//$s = 'fn'.substring( $php, $p, $q-1);
 								$s = 'fn'.substring( $php, $p, $q-1);
 								$php = substring_replace( $php, $s, $p, $q);								
 							}
-						} else { //decl has a name
+						} else { //it is a named function
 							func:
 							for( $p = $q-1; $php[$p] != '('; $p-- ); //get param start
 							for( $b = $p; $php[$b] > ' '; $b-- ); //get name start
@@ -521,12 +601,13 @@
 								$php[$p-1] = chr( ord( $php[$p-1] ) | 128 );
 							}
 							if ( $php[$k] == '{' ) { //long function:	func($x) ==> {
+								if ($glob) $php = substr_replace( $php, "global $glob;", $k+1, 0 );
 								if ( $php[$b+1] == '$' ) { //function variable
 									$php = substring_replace( $php, '', $q, $k-1 );									
 									$s = ' = function';
 									$php = substring_replace( $php, $s, $p, $p-1 );
 								} else {
-									$s = 'function '. substring( $php, $b+1, $q-1 );						
+									$s = 'function '. substring( $php, $b+1, $q-1 );	
 									$php = substring_replace( $php, $s, $b+1, $k-1 );
 								}
 							} else { //short function:	inc($x) ==> $x+1
@@ -548,8 +629,8 @@
 											case ';': if ( !$u && $n <= 0 ) break 2;
 										}
 									}
-
-									$s = 'function '. substring( $php, $b+1, $q-1 ) . '{ return ' . 
+									$s = 'function '. substring( $php, $b+1, $q-1 ) . 
+										( $glob ? '{ global ' . $glob . '; return ' : '{ return ' ) . 
 										substring( $php, $k, $m ) . '}';
 									$php = substring_replace( $php, $s, $b+1, $m );
 								}
@@ -558,13 +639,17 @@
 					}								
 				}				
 
-			//for $i=1..10 { : _ii_ is reserved
+			// type: function xxx() ... allow functions to be typed in a C like syntax
+				$php = preg_replace( '/(\w+):\s+(function[^{]*)/', '$2: $1 ', $php );
+			
+			//for $i = 1 .. 10 { : _ii_ is reserved
 				$php = preg_replace_callback( '/\bfor\s+\$([^=]+)=([^.]+)\.\.([^{]+)/', 
 					function ($m) {
 						$i = trim($m[1]);
+						$ii = '$_' . str_replace('.', '_', $i.$i) . '_';
 						$i0 = trim($m[2]);
 						$i9 = trim($m[3]);
-						return '$_'.$i.$i.'_ = '.$i9.'; for( $'.$i.'='.$i0.'; $'.$i.' <= $_'.$i.$i.'_; $'.$i.'++ )' ;
+						return $ii.' = '.$i9.'; for( $'.$i.'='.$i0.'; $'.$i.' <= '.$ii.'; $'.$i.'++ )' ;
 					},
 					$php );
 			
@@ -598,26 +683,24 @@
 				$php = preg_replace( '/(\$[\w._]+)\.(\w)/', '$1->$2', $php );			
 
 			//enum {}
-				if ( preg_match_all( '/[\n\r]\s*(enum\s*\{)/', $php, $M, PREG_OFFSET_CAPTURE ) ) {
-					$n = 1;	
+				if ( preg_match_all( '/[\n\r]\s*(enum\s*\{)/', $php, $M, PREG_OFFSET_CAPTURE ) ) {						
 					$prePHP->enum ??= [];
 					foreach( array_reverse( $M[1] ) as $m ) {
 						$p = $m[1];
 						$o = strpos( $php, '{', $p );
 						$q = strpos( $php, '}', $o );						
 						$E = substring( $php, $o+1, $q-1 );
+						$enum = 1;
 						foreach( splitt( ',', $E ) as $v ) {
 							if (str_contains( $v, '=' ) ) {
-								[$v, $nn] = splitt( $v, '=' );
+								[$v, $nn] = splitt( '=', $v );
 								$prePHP->enum[$v] = $nn;
 							} else {
-								$prePHP->enum[$v] = $n;
-								$n <<= 1;
+								$prePHP->enum[$v] = $enum;
+								$enum <<= 1;
 							}
-						}
-						$e = '/* enum: ';
-						foreach( $prePHP->enum as $k => $v ) $e .= hide($k) . '=' . $v . ',';
-						$e .= ' */' ;
+						}					
+						$e = '/* enum {'.$E.'} */';
 						$php = substring_replace( $php, $e, $p, $q );						
 					}									
 				}
@@ -649,34 +732,66 @@
 					$php = preg_replace( '/\\'.$fn.'\b/', '$GLOBALS[\'' . substr($fn,1). '\']', $php );
 				}
 
-			//case
+			//case x {}
 				/*
 				case ( ... ) {
 					'a','b': ... ;
 					else: ...;
 				}
 				*/
-				if ( preg_match_all( '/[\n\r]\s*(case)\s*\(/', $php, $M, PREG_OFFSET_CAPTURE) ) {
-					$d = 0;	
-					foreach( $M[1] as $m ) {
-						$p = $d + $m[1];
+				if ( preg_match_all( '/[\n\r]\s*(case)\s*[^{:\n\r]*(.)/', $php, $M, PREG_OFFSET_CAPTURE) ) {
+					$N = count( $M[2] ) - 1;
+					foreach ( array_reverse( $M[2] ) as $d => $m2 ) if ( $m2[0] == '{' ) {
+
+						 //case when ......
+
+						$p = $M[1][$N - $d][1];						
 						$q = str_paired( $php, $p, '{', '}' );
-						$s = substring( $php, $p, $q );
-						$s = 'switch' . substr($s, 4);
-						$s = preg_replace_callback( '/([\n\r]\s*)([\'"\w][^:\n\r]*:)/', function($m) {								
+						$k = $m2[1];
+
+						$s = substring( $php, $k+1, $q-1 );
+						$x = trim( substring( $php, $p+4, $k-1 ) );
+						if ( $x[0] != '(' ) $x = '( '.$x.' )';
+
+						//hide ,: within "'([{}])'" in $s
+						$Q = $B = null; $n = 0;
+						for ( $k = strpos($s, '{' ) + 1; $k < strlen( $s ); $k++ ) {
+							switch ( $s[$k] ) {
+								case '{': if (!$Q) { $B ??= '{'; if ( $B == '{' ) $n++; }; break;
+								case '[': if (!$Q) { $B ??= '['; if ( $B == '[' ) $n++; }; break;
+								case '(': if (!$Q) { $B ??= '('; if ( $B == '(' ) $n++; }; break;
+								case '}': if (!$Q) { if ( $B == '{' ) $n--; if ( !$n ) $B = null; } break;								
+								case ']': if (!$Q) { if ( $B == '[' ) $n--; if ( !$n ) $B = null; } break;
+								case ')': if (!$Q) { if ( $B == '(' ) $n--; if ( !$n ) $B = null; } break;
+								case "'": if ( $Q == "'" ) $Q = null; else $Q ??= "'"; break;
+								case '"': if ( $Q == '"' ) $Q = null; else $Q ??= '"'; break;									
+								case ',': case ':':
+									if ( $Q || $B ) $s[$k] = chr( ord( $s[$k] ) | 128);
+							}
+						}
+
+						$s = preg_replace_callback( '/([\n\r]\s*)([\'"\w-][^:\n\r]*:)/', function($m) {								
 								return $m[1].'case ' . str_replace( ',', ': case', $m[2] );
 						}, $s );
 						$s = preg_replace( '/;(\s*[\n\r]\s*case)/', '; break; $1', $s );
 						$s = preg_replace( '/([\n\r]\s*)case else:/', '$1default:', $s );
-						$php = substring_replace( $php, $s, $p, $q );
-						$d += strlen($s) - ($q - $p + 1);
+
+						$php = substring_replace( $php, "switch $x { $s }", $p, $q );
 					}
-				}
-				
+				}							
 			
+			// $x = f1 ? 1 : f2 ? 2 : f3 ? 3 : 4 [;,)]    ..........???
+	
+			// [a:1,b:2] -> ['a'=>1,'b'=>2]
+			if ( preg_match_all( '/\[\s*\w*\s*:/', $php, $M, PREG_OFFSET_CAPTURE) ) {
+				$p = $M[0][0][1];
+				$q = str_paired( $php, $p );
+				$s = substring( $php, $p+1, $q-1 );				
+				$php = substring_replace( $php, "arr( $s )", $p, $q );
+			}			
+
 			$src = substr_replace( $src, $php, $i, $j - $i + 1 );
 		} //while
-		
 
 		$prePHP->script[ $file ] = $src;
 	 } //function prePHP
@@ -734,7 +849,7 @@ deref();
 
 //echo '<pre>'; print_r( $prePHP->FUNCTIONS ); die;
 //echo '<pre>'; print_r( $prePHP->script ); die;
-//print_r( split( "\n", $prePHP->script[ $prePHP->script_name ] ) ); die;
+//echo '<pre>'; print_r( split( "\n", hideNCS( $prePHP->script[ $prePHP->script_name ] ) ) ); die;
 
 	function declared($d, ...$p) {
 		$d(...$p);
@@ -742,16 +857,17 @@ deref();
 
 	foreach ( $prePHP->script as $_filename_ => $_script_ ) {
 		//echo  $_filename_. ':<br>';
+		//echo( htmlspecialchars( $_script_ ) ); die;
 		$GLOBALS['_filename_'] = $_filename_;
 		try { 
 			eval( '?>' . $_script_ ); 		
 		} catch ( throwable $ex ) { 			
 			echo '<pre>'; 
-			echo  $_filename_. ':<br>';
+			echo  '<b>FILE: ' . $_filename_. '</b>:<br>';
 			print_r((array)$ex); 
 			echo '<pre>';
 			print_r( error_get_last() );
-			print_r( split( "\n", htmlspecialchars( $prePHP->script[ $_filename_ ] ) ) ); 
+			print_r( split( "\n", "\n" . htmlspecialchars( $prePHP->script[ $_filename_ ] ) ) ); 
 			die;
 		}
 	}
